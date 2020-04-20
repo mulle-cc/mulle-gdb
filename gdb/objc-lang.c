@@ -361,6 +361,9 @@ static const struct op_print objc_op_print_tab[] =
 
 static const char *objc_extensions[] =
 {
+// @mulle-objc@ file type .aam >
+   ".aam",
+// @mulle-objc@ file type .aam >
   ".m", NULL
 };
 
