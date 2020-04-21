@@ -19,6 +19,7 @@
 
 .deps
 .libs
+.mulle/var
 
 autom4te.cache
 config.cache
