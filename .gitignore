@@ -57,6 +57,8 @@ REVISION
 stamp-*
 *.stamp
 
+.mulle/var/
+
 # ignore in-tree prerequisites
 /mpfr*
 /mpc*
