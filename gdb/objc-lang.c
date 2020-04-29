@@ -77,17 +77,17 @@ struct objc_class {
   CORE_ADDR infra_class;
   CORE_ADDR universe;
 //  CORE_ADDR protocols;
-  long   classid;
-  long   inheritance;
+  unsigned long   classid;
+  unsigned long   inheritance;
 };
 
 struct objc_super {
-  long   classid;
-  long   methodid;
+  unsigned long   classid;
+  unsigned long   methodid;
 };
 
 struct objc_method {
-  long      sel;
+  unsigned long   sel;
   CORE_ADDR name;
   CORE_ADDR types;
   CORE_ADDR imp;
@@ -1299,14 +1299,13 @@ read_objc_methlist_method (struct gdbarch *gdbarch, CORE_ADDR addr,
 			   unsigned long num, struct objc_method *method)
 {
   gdb_assert (num < read_objc_methlist_nmethods (gdbarch, addr));
-  // @mulle-objc@ fix size >
   int   len;
 
   // fprintf( stderr, "%s :: %p %ld\n", __PRETTY_FUNCTION__, (void *) addr, num);
 
-  len = gdbarch_ptr_bit( gdbarch) / 8;
-  // @mulle-objc@ fix size >
-  read_objc_method (gdbarch, addr + len * 2 + (5 * len * num), method);
+  len   = gdbarch_ptr_bit( gdbarch) / 8;
+  addr += len * 2;
+  read_objc_method (gdbarch, addr + (5 * len * num), method);
 }
 
 
@@ -1586,6 +1585,10 @@ read_objc_pointerarray_entry(struct gdbarch *gdbarch,
  * pair.infraclass      = 16
  * pair.metaclass       = 480
  * pair.protocolclasses = 824
+ * i686: magic offsets
+ * pair.infraclass      = 8
+ * pair.metaclass       = 248
+ * pair.protocolclasses = 424
  */
 static inline CORE_ADDR
 metaclass_of_infraclass( struct gdbarch *gdbarch,
@@ -1593,7 +1596,7 @@ metaclass_of_infraclass( struct gdbarch *gdbarch,
 {
   if( gdbarch_ptr_bit( gdbarch) == 64)
      return( infraAddr + 480 - 16);
-  return( 0);
+  return( infraAddr + 248 - 8);
 }
 
 
@@ -1603,7 +1606,7 @@ metaclass_of_infraclass( struct gdbarch *gdbarch,
 // {
 //   if( gdbarch_ptr_bit( gdbarch) == 64)
 //      return( metaAddr - 480 + 16);
-//   return( 0);
+//   return( metaAddr - 248 + 8);
 // }
 
 
@@ -1621,8 +1624,7 @@ protocolclass_array_of_metaclass( struct gdbarch *gdbarch,
   len = gdbarch_ptr_bit( gdbarch) / 8;
   if( gdbarch_ptr_bit( gdbarch) == 64)
      return( read_memory_unsigned_integer( metaAddr + 824 - 480, len, byte_order));
-
-  return( 0);
+  return( read_memory_unsigned_integer( metaAddr + 424 - 248, len, byte_order));
 }
 
 
