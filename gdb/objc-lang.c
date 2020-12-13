@@ -1722,7 +1722,7 @@ find_implementation_in_methodlist(struct gdbarch *gdbarch,
      {
         /* FIXME: hppa arch was doing a pointer dereference
            here.  There needs to be a better way to do that.  */
-        fprintf( stderr, "%s match on %p\n", __PRETTY_FUNCTION__, (void *) meth_str.sel);
+        // fprintf( stderr, "%s match on %p\n", __PRETTY_FUNCTION__, (void *) meth_str.sel);
         return meth_str.imp;
      }
    }
