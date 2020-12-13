@@ -363,8 +363,8 @@ lookup_minimal_symbol (const char *name, const char *sfile,
 		       % MINIMAL_SYMBOL_HASH_SIZE);
 
 		  symbol_name_matcher_ftype *match
-		    = get_symbol_name_matcher (language_def (lang),
-					       lookup_name);
+		    = language_def (lang)->get_symbol_name_matcher
+							(lookup_name);
 		  struct minimal_symbol **msymbol_demangled_hash
 		    = objfile->per_bfd->msymbol_demangled_hash;
 
@@ -507,7 +507,7 @@ iterate_over_minimal_symbols
       enum language lang = (enum language) liter;
       const language_defn *lang_def = language_def (lang);
       symbol_name_matcher_ftype *name_match
-	= get_symbol_name_matcher (lang_def, lookup_name);
+	= lang_def->get_symbol_name_matcher (lookup_name);
 
       unsigned int hash
 	= lookup_name.search_name_hash (lang) % MINIMAL_SYMBOL_HASH_SIZE;
@@ -1418,9 +1418,8 @@ minimal_symbol_reader::install ()
 		   /* This will be freed later, by compute_and_set_names.  */
 		   char *demangled_name
 		     = symbol_find_demangled_name (msym, msym->linkage_name ());
-		   symbol_set_demangled_name
-		     (msym, demangled_name,
-		      &m_objfile->per_bfd->storage_obstack);
+		   msym->set_demangled_name
+		     (demangled_name, &m_objfile->per_bfd->storage_obstack);
 		   msym->name_set = 1;
 		 }
 	       /* This mangled_name_hash computation has to be outside of

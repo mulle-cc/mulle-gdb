@@ -1995,7 +1995,7 @@ _bfd_generic_link_output_symbols (bfd *output_bfd,
 	      newsym = bfd_make_empty_symbol (input_bfd);
 	      if (!newsym)
 		return FALSE;
-	      newsym->name = input_bfd->filename;
+	      newsym->name = bfd_get_filename (input_bfd);
 	      newsym->value = 0;
 	      newsym->flags = BSF_LOCAL | BSF_FILE;
 	      newsym->section = sec;
@@ -2661,13 +2661,11 @@ default_indirect_link_order (bfd *output_bfd,
 				  new_contents, loc, input_section->size))
     goto error_return;
 
-  if (contents != NULL)
-    free (contents);
+  free (contents);
   return TRUE;
 
  error_return:
-  if (contents != NULL)
-    free (contents);
+  free (contents);
   return FALSE;
 }
 
@@ -2894,10 +2892,8 @@ _bfd_handle_already_linked (asection *sec,
 	      (_("%pB: duplicate section `%pA' has different contents\n"),
 	       sec->owner, sec);
 
-	  if (sec_contents)
-	    free (sec_contents);
-	  if (l_sec_contents)
-	    free (l_sec_contents);
+	  free (sec_contents);
+	  free (l_sec_contents);
 	}
       break;
     }
@@ -3099,8 +3095,13 @@ bfd_generic_define_common_symbol (bfd *output_bfd,
   section = h->u.c.p->section;
 
   /* Increase the size of the section to align the common symbol.
-     The alignment must be a power of two.  */
-  alignment = bfd_octets_per_byte (output_bfd, section) << power_of_two;
+     The alignment must be a power of two.  But if the section does
+     not have any alignment requirement then do not increase the
+     alignment unnecessarily.  */
+  if (power_of_two)
+    alignment = bfd_octets_per_byte (output_bfd, section) << power_of_two;
+  else
+    alignment = 1;
   BFD_ASSERT (alignment != 0 && (alignment & -alignment) == alignment);
   section->size += alignment - 1;
   section->size &= -alignment;

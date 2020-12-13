@@ -2083,8 +2083,7 @@ mmo_scan (bfd *abfd)
 
   /* Free whatever resources we took.  */
   for (i = 0; i < sizeof (file_names) / sizeof (file_names[0]); i++)
-    if (file_names[i])
-      free (file_names[i]);
+    free (file_names[i]);
   return ! error;
 }
 
@@ -2939,7 +2938,8 @@ mmo_write_symbols_and_terminator (bfd *abfd)
   if (table == NULL)
     return FALSE;
 
-  memcpy (table, orig_table, count * sizeof (asymbol *));
+  if (count != 0)
+    memcpy (table, orig_table, count * sizeof (asymbol *));
 
   /* Move :Main (if there is one) to the first position.  This is
      necessary to get the same layout of the trie-tree when linking as

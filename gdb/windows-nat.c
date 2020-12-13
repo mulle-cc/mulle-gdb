@@ -233,9 +233,6 @@ static std::vector<windows_thread_info *> thread_list;
 /* Counts of things.  */
 static int saw_create;
 static int open_process_used = 0;
-#ifdef __x86_64__
-static bool wow64_process = false;
-#endif
 
 /* User options.  */
 static bool new_console = false;
@@ -317,7 +314,9 @@ struct windows_nat_target final : public x86_nat_target<inf_child_target>
 
   bool stopped_by_sw_breakpoint () override
   {
-    return current_windows_thread->stopped_at_software_breakpoint;
+    windows_thread_info *th
+      = thread_rec (inferior_ptid, DONT_INVALIDATE_CONTEXT);
+    return th->stopped_at_software_breakpoint;
   }
 
   bool supports_stopped_by_sw_breakpoint () override
@@ -356,6 +355,8 @@ struct windows_nat_target final : public x86_nat_target<inf_child_target>
   const char *thread_name (struct thread_info *) override;
 
   int get_windows_debug_event (int pid, struct target_waitstatus *ourstatus);
+
+  void do_initial_windows_stuff (DWORD pid, bool attaching);
 };
 
 static windows_nat_target the_windows_nat_target;
@@ -604,6 +605,7 @@ windows_fetch_one_register (struct regcache *regcache,
   else
     {
       if (th->stopped_at_software_breakpoint
+	  && !th->pc_adjusted
 	  && r == gdbarch_pc_regnum (gdbarch))
 	{
 	  int size = register_size (gdbarch, r);
@@ -622,6 +624,8 @@ windows_fetch_one_register (struct regcache *regcache,
 	      value -= gdbarch_decr_pc_after_break (gdbarch);
 	      memcpy (context_offset, &value, size);
 	    }
+	  /* Make sure we only rewrite the PC a single time.  */
+	  th->pc_adjusted = true;
 	}
       regcache->raw_supply (r, context_offset);
     }
@@ -831,7 +835,7 @@ windows_make_so (const char *name, LPVOID load_addr)
     {
       asection *text = NULL;
 
-      gdb_bfd_ref_ptr abfd (gdb_bfd_open (so->so_name, "pei-i386", -1));
+      gdb_bfd_ref_ptr abfd (gdb_bfd_open (so->so_name, "pei-i386"));
 
       if (abfd == NULL)
 	return so;
@@ -982,13 +986,13 @@ signal_event_command (const char *args, int from_tty)
 int
 windows_nat::handle_output_debug_string (struct target_waitstatus *ourstatus)
 {
-  gdb::unique_xmalloc_ptr<char> s;
   int retval = 0;
 
-  if (!target_read_string
-	((CORE_ADDR) (uintptr_t) current_event.u.DebugString.lpDebugStringData,
-	 &s, 1024, 0)
-      || !s || !*(s.get ()))
+  gdb::unique_xmalloc_ptr<char> s
+    = (target_read_string
+       ((CORE_ADDR) (uintptr_t) current_event.u.DebugString.lpDebugStringData,
+	1024));
+  if (s == nullptr || !*(s.get ()))
     /* nothing to do */;
   else if (!startswith (s.get (), _CYGWIN_SIGNAL_STRING))
     {
@@ -1128,11 +1132,15 @@ display_selector (HANDLE thread, DWORD sel)
 static void
 display_selectors (const char * args, int from_tty)
 {
-  if (!current_windows_thread)
+  if (inferior_ptid == null_ptid)
     {
       puts_filtered ("Impossible to display selectors now.\n");
       return;
     }
+
+  windows_thread_info *current_windows_thread
+    = thread_rec (inferior_ptid, DONT_INVALIDATE_CONTEXT);
+
   if (!args)
     {
 #ifdef __x86_64__
@@ -1213,10 +1221,8 @@ windows_nat::handle_ms_vc_exception (const EXCEPTION_RECORD *rec)
       if (named_thread != NULL)
 	{
 	  int thread_name_len;
-	  gdb::unique_xmalloc_ptr<char> thread_name;
-
-	  thread_name_len = target_read_string (thread_name_target,
-						&thread_name, 1025, NULL);
+	  gdb::unique_xmalloc_ptr<char> thread_name
+	    = target_read_string (thread_name_target, 1025, &thread_name_len);
 	  if (thread_name_len > 0)
 	    {
 	      thread_name.get ()[thread_name_len - 1] = '\0';
@@ -1366,12 +1372,11 @@ fake_create_process (void)
        (unsigned) GetLastError ());
       /*  We can not debug anything in that case.  */
     }
-  current_windows_thread
-    = windows_add_thread (ptid_t (current_event.dwProcessId,
-				  current_event.dwThreadId, 0),
-			  current_event.u.CreateThread.hThread,
-			  current_event.u.CreateThread.lpThreadLocalBase,
-			  true /* main_thread_p */);
+  windows_add_thread (ptid_t (current_event.dwProcessId, 0,
+			      current_event.dwThreadId),
+		      current_event.u.CreateThread.hThread,
+		      current_event.u.CreateThread.lpThreadLocalBase,
+		      true /* main_thread_p */);
   return current_event.dwThreadId;
 }
 
@@ -1531,8 +1536,6 @@ windows_nat_target::get_windows_debug_event (int pid,
 {
   BOOL debug_event;
   DWORD continue_status, event_code;
-  windows_thread_info *th;
-  static windows_thread_info dummy_thread_info (0, 0, 0);
   DWORD thread_id = 0;
 
   /* If there is a relevant pending stop, report it now.  See the
@@ -1544,10 +1547,9 @@ windows_nat_target::get_windows_debug_event (int pid,
       thread_id = stop->thread_id;
       *ourstatus = stop->status;
 
-      inferior_ptid = ptid_t (current_event.dwProcessId, thread_id, 0);
-      current_windows_thread = thread_rec (inferior_ptid,
-					   INVALIDATE_CONTEXT);
-      current_windows_thread->reload_context = 1;
+      ptid_t ptid (current_event.dwProcessId, thread_id);
+      windows_thread_info *th = thread_rec (ptid, INVALIDATE_CONTEXT);
+      th->reload_context = 1;
 
       return thread_id;
     }
@@ -1561,7 +1563,6 @@ windows_nat_target::get_windows_debug_event (int pid,
 
   event_code = current_event.dwDebugEventCode;
   ourstatus->kind = TARGET_WAITKIND_SPURIOUS;
-  th = NULL;
   have_saved_context = 0;
 
   switch (event_code)
@@ -1587,7 +1588,7 @@ windows_nat_target::get_windows_debug_event (int pid,
 	}
       /* Record the existence of this thread.  */
       thread_id = current_event.dwThreadId;
-      th = windows_add_thread
+      windows_add_thread
         (ptid_t (current_event.dwProcessId, current_event.dwThreadId, 0),
 	 current_event.u.CreateThread.hThread,
 	 current_event.u.CreateThread.lpThreadLocalBase,
@@ -1604,7 +1605,6 @@ windows_nat_target::get_windows_debug_event (int pid,
 				     current_event.dwThreadId, 0),
 			     current_event.u.ExitThread.dwExitCode,
 			     false /* main_thread_p */);
-      th = &dummy_thread_info;
       break;
 
     case CREATE_PROCESS_DEBUG_EVENT:
@@ -1618,7 +1618,7 @@ windows_nat_target::get_windows_debug_event (int pid,
 
       current_process_handle = current_event.u.CreateProcessInfo.hProcess;
       /* Add the main thread.  */
-      th = windows_add_thread
+      windows_add_thread
         (ptid_t (current_event.dwProcessId,
 		 current_event.dwThreadId, 0),
 	 current_event.u.CreateProcessInfo.hThread,
@@ -1755,20 +1755,13 @@ windows_nat_target::get_windows_debug_event (int pid,
 	  && windows_initialization_done)
 	{
 	  ptid_t ptid = ptid_t (current_event.dwProcessId, thread_id, 0);
-	  th = thread_rec (ptid, INVALIDATE_CONTEXT);
+	  windows_thread_info *th = thread_rec (ptid, INVALIDATE_CONTEXT);
 	  th->stopped_at_software_breakpoint = true;
+	  th->pc_adjusted = false;
 	}
       pending_stops.push_back ({thread_id, *ourstatus, current_event});
       thread_id = 0;
       CHECK (windows_continue (continue_status, desired_stop_thread_id, 0));
-    }
-  else
-    {
-      inferior_ptid = ptid_t (current_event.dwProcessId, thread_id, 0);
-      current_windows_thread = th;
-      if (!current_windows_thread)
-	current_windows_thread = thread_rec (inferior_ptid,
-					     INVALIDATE_CONTEXT);
     }
 
 out:
@@ -1826,16 +1819,25 @@ windows_nat_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	{
 	  ptid_t result = ptid_t (current_event.dwProcessId, retval, 0);
 
-	  if (current_windows_thread != nullptr)
+	  if (ourstatus->kind != TARGET_WAITKIND_EXITED
+	      && ourstatus->kind !=  TARGET_WAITKIND_SIGNALLED)
 	    {
-	      current_windows_thread->stopped_at_software_breakpoint = false;
-	      if (current_event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT
-		  && ((current_event.u.Exception.ExceptionRecord.ExceptionCode
-		       == EXCEPTION_BREAKPOINT)
-		      || (current_event.u.Exception.ExceptionRecord.ExceptionCode
-			  == STATUS_WX86_BREAKPOINT))
-		  && windows_initialization_done)
-		current_windows_thread->stopped_at_software_breakpoint = true;
+	      windows_thread_info *th = thread_rec (result, INVALIDATE_CONTEXT);
+
+	      if (th != nullptr)
+		{
+		  th->stopped_at_software_breakpoint = false;
+		  if (current_event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT
+		      && ((current_event.u.Exception.ExceptionRecord.ExceptionCode
+			   == EXCEPTION_BREAKPOINT)
+			  || (current_event.u.Exception.ExceptionRecord.ExceptionCode
+			      == STATUS_WX86_BREAKPOINT))
+		      && windows_initialization_done)
+		    {
+		      th->stopped_at_software_breakpoint = true;
+		      th->pc_adjusted = false;
+		    }
+		}
 	    }
 
 	  return result;
@@ -1970,8 +1972,8 @@ windows_add_all_dlls (void)
     }
 }
 
-static void
-do_initial_windows_stuff (struct target_ops *ops, DWORD pid, int attaching)
+void
+windows_nat_target::do_initial_windows_stuff (DWORD pid, bool attaching)
 {
   int i;
   struct inferior *inf;
@@ -1987,8 +1989,8 @@ do_initial_windows_stuff (struct target_ops *ops, DWORD pid, int attaching)
 #endif
   current_event.dwProcessId = pid;
   memset (&current_event, 0, sizeof (current_event));
-  if (!target_is_pushed (ops))
-    push_target (ops);
+  if (!target_is_pushed (this))
+    push_target (this);
   disable_breakpoints_in_shlibs ();
   windows_clear_solib ();
   clear_proceed_status (0);
@@ -2013,22 +2015,18 @@ do_initial_windows_stuff (struct target_ops *ops, DWORD pid, int attaching)
   inferior_appeared (inf, pid);
   inf->attach_flag = attaching;
 
-  /* Make the new process the current inferior, so terminal handling
-     can rely on it.  When attaching, we don't know about any thread
-     id here, but that's OK --- nothing should be referencing the
-     current thread until we report an event out of windows_wait.  */
-  inferior_ptid = ptid_t (pid);
-
   target_terminal::init ();
   target_terminal::inferior ();
 
   windows_initialization_done = 0;
 
+  ptid_t last_ptid;
+
   while (1)
     {
       struct target_waitstatus status;
 
-      ops->wait (minus_one_ptid, &status, 0);
+      last_ptid = this->wait (minus_one_ptid, &status, 0);
 
       /* Note windows_wait returns TARGET_WAITKIND_SPURIOUS for thread
 	 events.  */
@@ -2036,8 +2034,10 @@ do_initial_windows_stuff (struct target_ops *ops, DWORD pid, int attaching)
 	  && status.kind != TARGET_WAITKIND_SPURIOUS)
 	break;
 
-      ops->resume (minus_one_ptid, 0, GDB_SIGNAL_0);
+      this->resume (minus_one_ptid, 0, GDB_SIGNAL_0);
     }
+
+  switch_to_thread (find_thread_ptid (this, last_ptid));
 
   /* Now that the inferior has been started and all DLLs have been mapped,
      we can iterate over all DLLs and load them in.
@@ -2170,7 +2170,7 @@ windows_nat_target::attach (const char *args, int from_tty)
     }
 #endif
 
-  do_initial_windows_stuff (this, pid, 1);
+  do_initial_windows_stuff (pid, 1);
   target_terminal::ours ();
 }
 
@@ -2200,7 +2200,7 @@ windows_nat_target::detach (inferior *inf, int from_tty)
     }
 
   x86_cleanup_dregs ();
-  inferior_ptid = null_ptid;
+  switch_to_no_thread ();
   detach_inferior (inf);
 
   maybe_unpush_target ();
@@ -2727,7 +2727,7 @@ windows_nat_target::create_inferior (const char *exec_file,
   PROCESS_INFORMATION pi;
   BOOL ret;
   DWORD flags = 0;
-  const char *inferior_io_terminal = get_inferior_io_terminal ();
+  const char *inferior_tty = current_inferior ()->tty ();
 
   if (!exec_file)
     error (_("No executable specified, use `target exec'."));
@@ -2826,14 +2826,14 @@ windows_nat_target::create_inferior (const char *exec_file,
       w32_env = NULL;
     }
 
-  if (!inferior_io_terminal)
+  if (inferior_tty == nullptr)
     tty = ostdin = ostdout = ostderr = -1;
   else
     {
-      tty = open (inferior_io_terminal, O_RDWR | O_NOCTTY);
+      tty = open (inferior_tty, O_RDWR | O_NOCTTY);
       if (tty < 0)
 	{
-	  print_sys_errmsg (inferior_io_terminal, errno);
+	  print_sys_errmsg (inferior_tty, errno);
 	  ostdin = ostdout = ostderr = -1;
 	}
       else
@@ -2898,19 +2898,19 @@ windows_nat_target::create_inferior (const char *exec_file,
       allargs_len = strlen (allargs_copy);
     }
   /* If not all the standard streams are redirected by the command
-     line, use inferior_io_terminal for those which aren't.  */
-  if (inferior_io_terminal
+     line, use INFERIOR_TTY for those which aren't.  */
+  if (inferior_tty != nullptr
       && !(fd_inp >= 0 && fd_out >= 0 && fd_err >= 0))
     {
       SECURITY_ATTRIBUTES sa;
       sa.nLength = sizeof(sa);
       sa.lpSecurityDescriptor = 0;
       sa.bInheritHandle = TRUE;
-      tty = CreateFileA (inferior_io_terminal, GENERIC_READ | GENERIC_WRITE,
+      tty = CreateFileA (inferior_tty, GENERIC_READ | GENERIC_WRITE,
 			 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
       if (tty == INVALID_HANDLE_VALUE)
 	warning (_("Warning: Failed to open TTY %s, error %#x."),
-		 inferior_io_terminal, (unsigned) GetLastError ());
+		 inferior_tty, (unsigned) GetLastError ());
     }
   if (redirected || tty != INVALID_HANDLE_VALUE)
     {
@@ -3010,7 +3010,7 @@ windows_nat_target::create_inferior (const char *exec_file,
   else
     saw_create = 0;
 
-  do_initial_windows_stuff (this, pi.dwProcessId, 0);
+  do_initial_windows_stuff (pi.dwProcessId, 0);
 
   /* windows_continue (DBG_CONTINUE, -1, 0); */
 }

@@ -27,6 +27,12 @@ struct target_desc;
 /* The inferior's target description.  This is a global because the
    Windows ports support neither bi-arch nor multi-process.  */
 extern const struct target_desc *win32_tdesc;
+#ifdef __x86_64__
+extern const struct target_desc *wow64_win32_tdesc;
+
+typedef BOOL (WINAPI *winapi_Wow64GetThreadContext) (HANDLE, PWOW64_CONTEXT);
+extern winapi_Wow64GetThreadContext win32_Wow64GetThreadContext;
+#endif
 
 struct win32_target_ops
 {
@@ -34,7 +40,7 @@ struct win32_target_ops
   void (*arch_setup) (void);
 
   /* The number of target registers.  */
-  int num_regs;
+  int (*num_regs) (void);
 
   /* Perform initializations on startup.  */
   void (*initial_stuff) (void);
@@ -174,9 +180,5 @@ extern void win32_require_context (windows_nat::windows_thread_info *th);
    The strwinerror function does not change the current setting
    of GetLastError.  */
 extern char * strwinerror (DWORD error);
-
-/* in wincecompat.c */
-
-extern void to_back_slashes (char *);
 
 #endif /* GDBSERVER_WIN32_LOW_H */

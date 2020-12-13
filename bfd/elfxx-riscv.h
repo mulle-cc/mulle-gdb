@@ -22,6 +22,7 @@
 
 #include "elf/common.h"
 #include "elf/internal.h"
+#include "opcode/riscv.h"
 
 extern reloc_howto_type *
 riscv_reloc_name_lookup (bfd *, const char *);
@@ -72,6 +73,9 @@ typedef struct {
   void (*error_handler) (const char *,
 			 ...) ATTRIBUTE_PRINTF_1;
   unsigned *xlen;
+  void (*get_default_version) (const char *,
+                              unsigned int *,
+                              unsigned int *);
 } riscv_parse_subset_t;
 
 extern bfd_boolean
@@ -86,6 +90,9 @@ riscv_release_subset_list (riscv_subset_list_t *);
 
 extern char *
 riscv_arch_str (unsigned, const riscv_subset_list_t *);
+
+extern size_t
+riscv_estimate_digit (unsigned);
 
 /* ISA extension name class. E.g. "zbb" corresponds to RV_ISA_CLASS_Z,
    "xargs" corresponds to RV_ISA_CLASS_X, etc.  Order is important
@@ -103,3 +110,15 @@ typedef enum riscv_isa_ext_class
 
 riscv_isa_ext_class_t
 riscv_get_prefix_class (const char *);
+
+extern int
+riscv_get_priv_spec_class (const char *, enum riscv_priv_spec_class *);
+
+extern int
+riscv_get_priv_spec_class_from_numbers (unsigned int,
+					unsigned int,
+					unsigned int,
+					enum riscv_priv_spec_class *);
+
+extern const char *
+riscv_get_priv_spec_name (enum riscv_priv_spec_class);

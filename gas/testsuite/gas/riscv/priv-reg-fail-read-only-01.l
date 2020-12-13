@@ -1,4 +1,5 @@
 .*Assembler messages:
+#...
 .*Warning: Read-only CSR is written `csrw cycle,a1'
 .*Warning: Read-only CSR is written `csrw time,a1'
 .*Warning: Read-only CSR is written `csrw instret,a1'
@@ -67,3 +68,4 @@
 .*Warning: Read-only CSR is written `csrw marchid,a1'
 .*Warning: Read-only CSR is written `csrw mimpid,a1'
 .*Warning: Read-only CSR is written `csrw mhartid,a1'
+#...

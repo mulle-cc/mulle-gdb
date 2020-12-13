@@ -61,6 +61,24 @@ attribute::value_as_address () const
 
 /* See attribute.h.  */
 
+const char *
+attribute::value_as_string () const
+{
+  if (form == DW_FORM_strp || form == DW_FORM_line_strp
+      || form == DW_FORM_string
+      || form == DW_FORM_strx
+      || form == DW_FORM_strx1
+      || form == DW_FORM_strx2
+      || form == DW_FORM_strx3
+      || form == DW_FORM_strx4
+      || form == DW_FORM_GNU_str_index
+      || form == DW_FORM_GNU_strp_alt)
+    return DW_STRING (this);
+  return nullptr;
+}
+
+/* See attribute.h.  */
+
 bool
 attribute::form_is_block () const
 {
@@ -102,38 +120,13 @@ attribute::form_is_constant () const
     }
 }
 
-/* DW_ADDR is always stored already as sect_offset; despite for the forms
-   besides DW_FORM_ref_addr it is stored as cu_offset in the DWARF file.  */
-
-bool
-attribute::form_is_ref () const
-{
-  switch (form)
-    {
-    case DW_FORM_ref_addr:
-    case DW_FORM_ref1:
-    case DW_FORM_ref2:
-    case DW_FORM_ref4:
-    case DW_FORM_ref8:
-    case DW_FORM_ref_udata:
-    case DW_FORM_GNU_ref_alt:
-      return true;
-    default:
-      return false;
-    }
-}
-
 /* See attribute.h.  */
 
-sect_offset
-attribute::get_ref_die_offset () const
+void
+attribute::get_ref_die_offset_complaint () const
 {
-  if (form_is_ref ())
-    return (sect_offset) DW_UNSND (this);
-
   complaint (_("unsupported die ref attribute form: '%s'"),
 	     dwarf_form_name (form));
-  return {};
 }
 
 /* See attribute.h.  */

@@ -229,13 +229,19 @@ usage (FILE *stream, int status)
   -g, --debugging          Display debug information in object file\n\
   -e, --debugging-tags     Display debug information using ctags style\n\
   -G, --stabs              Display (in raw form) any STABS info in the file\n\
-  -W[lLiaprmfFsoRtUuTgAckK] or\n\
+  -W[lLiaprmfFsoORtUuTgAckK] or\n\
   --dwarf[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,=frames,\n\
-          =frames-interp,=str,=loc,=Ranges,=pubtypes,\n\
+          =frames-interp,=str,=str-offsets,=loc,=Ranges,=pubtypes,\n\
           =gdb_index,=trace_info,=trace_abbrev,=trace_aranges,\n\
           =addr,=cu_index,=links,=follow-links]\n\
                            Display DWARF info in the file\n\
+"));
+#ifdef ENABLE_LIBCTF
+  fprintf (stream, _("\
   --ctf=SECTION            Display CTF info from SECTION\n\
+"));
+#endif
+  fprintf (stream, _("\
   -t, --syms               Display the contents of the symbol table(s)\n\
   -T, --dynamic-syms       Display the contents of the dynamic symbol table\n\
   -r, --reloc              Display the relocation entries in the file\n\
@@ -284,9 +290,12 @@ usage (FILE *stream, int status)
       --dwarf-depth=N        Do not display DIEs at depth N or greater\n\
       --dwarf-start=N        Display DIEs starting with N, at the same depth\n\
                              or deeper\n\
-      --dwarf-check          Make additional dwarf internal consistency checks.\
-      \n\
-      --ctf-parent=SECTION       Use SECTION as the CTF parent\n\
+      --dwarf-check          Make additional dwarf internal consistency checks.\n"));
+#ifdef ENABLE_LIBCTF
+      fprintf (stream, _("\
+      --ctf-parent=SECTION     Use SECTION as the CTF parent\n"));
+#endif
+      fprintf (stream, _("\
       --visualize-jumps          Visualize jumps by drawing ASCII art lines\n\
       --visualize-jumps=color    Use colors in the ASCII art\n\
       --visualize-jumps=extended-color   Use extended 8-bit color codes\n\
@@ -328,8 +337,10 @@ enum option_values
     OPTION_NO_RECURSE_LIMIT,
     OPTION_INLINES,
     OPTION_SOURCE_COMMENT,
+#ifdef ENABLE_LIBCTF
     OPTION_CTF,
     OPTION_CTF_PARENT,
+#endif
     OPTION_VISUALIZE_JUMPS
   };
 
@@ -375,8 +386,10 @@ static struct option long_options[]=
   {"special-syms", no_argument, &dump_special_syms, 1},
   {"include", required_argument, NULL, 'I'},
   {"dwarf", optional_argument, NULL, OPTION_DWARF},
+#ifdef ENABLE_LIBCTF
   {"ctf", required_argument, NULL, OPTION_CTF},
   {"ctf-parent", required_argument, NULL, OPTION_CTF_PARENT},
+#endif
   {"stabs", no_argument, NULL, 'G'},
   {"start-address", required_argument, NULL, OPTION_START_ADDRESS},
   {"stop-address", required_argument, NULL, OPTION_STOP_ADDRESS},
@@ -2555,13 +2568,13 @@ disassemble_bytes (struct disassemble_info * inf,
 {
   struct objdump_disasm_info *aux;
   asection *section;
-  int octets_per_line;
-  int skip_addr_chars;
+  unsigned int octets_per_line;
+  unsigned int skip_addr_chars;
   bfd_vma addr_offset;
   unsigned int opb = inf->octets_per_byte;
   unsigned int skip_zeroes = inf->skip_zeroes;
   unsigned int skip_zeroes_at_end = inf->skip_zeroes_at_end;
-  int octets = opb;
+  size_t octets;
   SFILE sfile;
 
   aux = (struct objdump_disasm_info *) inf->application_data;
@@ -2630,7 +2643,6 @@ disassemble_bytes (struct disassemble_info * inf,
   addr_offset = start_offset;
   while (addr_offset < stop_offset)
     {
-      bfd_vma z;
       bfd_boolean need_nl = FALSE;
 
       octets = 0;
@@ -2640,41 +2652,42 @@ disassemble_bytes (struct disassemble_info * inf,
 
       /* If we see more than SKIP_ZEROES octets of zeroes, we just
 	 print `...'.  */
-      for (z = addr_offset * opb; z < stop_offset * opb; z++)
-	if (data[z] != 0)
-	  break;
+      if (! disassemble_zeroes)
+	for (; addr_offset * opb + octets < stop_offset * opb; octets++)
+	  if (data[addr_offset * opb + octets] != 0)
+	    break;
       if (! disassemble_zeroes
 	  && (inf->insn_info_valid == 0
 	      || inf->branch_delay_insns == 0)
-	  && (z - addr_offset * opb >= skip_zeroes
-	      || (z == stop_offset * opb &&
-		  z - addr_offset * opb < skip_zeroes_at_end)))
+	  && (octets >= skip_zeroes
+	      || (addr_offset * opb + octets == stop_offset * opb
+		  && octets < skip_zeroes_at_end)))
 	{
 	  /* If there are more nonzero octets to follow, we only skip
 	     zeroes in multiples of 4, to try to avoid running over
 	     the start of an instruction which happens to start with
 	     zero.  */
-	  if (z != stop_offset * opb)
-	    z = addr_offset * opb + ((z - addr_offset * opb) &~ 3);
-
-	  octets = z - addr_offset * opb;
+	  if (addr_offset * opb + octets != stop_offset * opb)
+	    octets &= ~3;
 
 	  /* If we are going to display more data, and we are displaying
 	     file offsets, then tell the user how many zeroes we skip
 	     and the file offset from where we resume dumping.  */
-	  if (display_file_offsets && ((addr_offset + (octets / opb)) < stop_offset))
-	    printf ("\t... (skipping %d zeroes, resuming at file offset: 0x%lx)\n",
-		    octets / opb,
+	  if (display_file_offsets
+	      && addr_offset + octets / opb < stop_offset)
+	    printf (_("\t... (skipping %lu zeroes, "
+		      "resuming at file offset: 0x%lx)\n"),
+		    (unsigned long) (octets / opb),
 		    (unsigned long) (section->filepos
-				     + (addr_offset + (octets / opb))));
+				     + addr_offset + octets / opb));
 	  else
 	    printf ("\t...\n");
 	}
       else
 	{
 	  char buf[50];
-	  int bpc = 0;
-	  int pb = 0;
+	  unsigned int bpc = 0;
+	  unsigned int pb = 0;
 
 	  if (with_line_numbers || with_source_code)
 	    show_line (aux->abfd, section, addr_offset);
@@ -2706,6 +2719,8 @@ disassemble_bytes (struct disassemble_info * inf,
 
 	  if (insns)
 	    {
+	      int insn_size;
+
 	      sfile.pos = 0;
 	      inf->fprintf_func = (fprintf_ftype) objdump_sprintf;
 	      inf->stream = &sfile;
@@ -2722,13 +2737,13 @@ disassemble_bytes (struct disassemble_info * inf,
 		  && *relppp < relppend)
 		{
 		  bfd_signed_vma distance_to_rel;
-		  int insn_size = 0;
 		  int max_reloc_offset
 		    = aux->abfd->arch_info->max_reloc_offset_into_insn;
 
 		  distance_to_rel = ((**relppp)->address - rel_offset
 				     - addr_offset);
 
+		  insn_size = 0;
 		  if (distance_to_rel > 0
 		      && (max_reloc_offset < 0
 			  || distance_to_rel <= max_reloc_offset))
@@ -2769,8 +2784,8 @@ disassemble_bytes (struct disassemble_info * inf,
 		}
 
 	      if (! disassemble_all
-		  && (section->flags & (SEC_CODE | SEC_HAS_CONTENTS))
-		  == (SEC_CODE | SEC_HAS_CONTENTS))
+		  && ((section->flags & (SEC_CODE | SEC_HAS_CONTENTS))
+		      == (SEC_CODE | SEC_HAS_CONTENTS)))
 		/* Set a stop_vma so that the disassembler will not read
 		   beyond the next symbol.  We assume that symbols appear on
 		   the boundaries between instructions.  We only do this when
@@ -2778,21 +2793,22 @@ disassemble_bytes (struct disassemble_info * inf,
 		inf->stop_vma = section->vma + stop_offset;
 
 	      inf->stop_offset = stop_offset;
-	      octets = (*disassemble_fn) (section->vma + addr_offset, inf);
+	      insn_size = (*disassemble_fn) (section->vma + addr_offset, inf);
+	      octets = insn_size;
 
 	      inf->stop_vma = 0;
 	      inf->fprintf_func = (fprintf_ftype) fprintf;
 	      inf->stream = stdout;
 	      if (insn_width == 0 && inf->bytes_per_line != 0)
 		octets_per_line = inf->bytes_per_line;
-	      if (octets < (int) opb)
+	      if (insn_size < (int) opb)
 		{
 		  if (sfile.pos)
 		    printf ("%s\n", sfile.buffer);
-		  if (octets >= 0)
+		  if (insn_size >= 0)
 		    {
 		      non_fatal (_("disassemble_fn returned length %d"),
-				 octets);
+				 insn_size);
 		      exit_status = 1;
 		    }
 		  break;
@@ -2838,11 +2854,11 @@ disassemble_bytes (struct disassemble_info * inf,
 		  /* PR 21580: Check for a buffer ending early.  */
 		  if (j + bpc <= stop_offset * opb)
 		    {
-		      int k;
+		      unsigned int k;
 
 		      if (inf->display_endian == BFD_ENDIAN_LITTLE)
 			{
-			  for (k = bpc - 1; k >= 0; k--)
+			  for (k = bpc; k-- != 0; )
 			    printf ("%02x", (unsigned) data[j + k]);
 			}
 		      else
@@ -2856,7 +2872,7 @@ disassemble_bytes (struct disassemble_info * inf,
 
 	      for (; pb < octets_per_line; pb += bpc)
 		{
-		  int k;
+		  unsigned int k;
 
 		  for (k = 0; k < bpc; k++)
 		    printf ("  ");
@@ -2911,11 +2927,11 @@ disassemble_bytes (struct disassemble_info * inf,
 		      /* PR 21619: Check for a buffer ending early.  */
 		      if (j + bpc <= stop_offset * opb)
 			{
-			  int k;
+			  unsigned int k;
 
 			  if (inf->display_endian == BFD_ENDIAN_LITTLE)
 			    {
-			      for (k = bpc - 1; k >= 0; k--)
+			      for (k = bpc; k-- != 0; )
 				printf ("%02x", (unsigned) data[j + k]);
 			    }
 			  else
@@ -2986,8 +3002,8 @@ disassemble_bytes (struct disassemble_info * inf,
 
 	      if (q->addend)
 		{
-		  bfd_signed_vma addend = q->addend;
-		  if (addend < 0)
+		  bfd_vma addend = q->addend;
+		  if ((bfd_signed_vma) addend < 0)
 		    {
 		      printf ("-0x");
 		      addend = -addend;
@@ -3475,6 +3491,8 @@ disassemble_data (bfd *abfd)
     /* ??? Aborting here seems too drastic.  We could default to big or little
        instead.  */
     disasm_info.endian = BFD_ENDIAN_UNKNOWN;
+
+  disasm_info.endian_code = disasm_info.endian;
 
   /* Allow the target to customize the info structure.  */
   disassemble_init_for_target (& disasm_info);
@@ -4021,6 +4039,7 @@ dump_bfd_header (bfd *abfd)
 }
 
 
+#ifdef ENABLE_LIBCTF
 /* Formatting callback function passed to ctf_dump.  Returns either the pointer
    it is passed, or a pointer to newly-allocated storage, in which case
    dump_ctf() will free it when it no longer needs it.  */
@@ -4050,6 +4069,29 @@ make_ctfsect (const char *name, bfd_byte *data,
   ctfsect.cts_data = data;
 
   return ctfsect;
+}
+
+/* Dump CTF errors/warnings.  */
+static void
+dump_ctf_errs (ctf_file_t *fp)
+{
+  ctf_next_t *it = NULL;
+  char *errtext;
+  int is_warning;
+  int err;
+
+  /* Dump accumulated errors and warnings.  */
+  while ((errtext = ctf_errwarning_next (fp, &it, &is_warning, &err)) != NULL)
+    {
+      non_fatal (_("%s: %s"), is_warning ? _("warning"): _("error"),
+		 errtext);
+      free (errtext);
+    }
+  if (err != ECTF_NEXT_END)
+    {
+      non_fatal (_("CTF error: cannot get CTF errors: `%s'"),
+		 ctf_errmsg (err));
+    }
 }
 
 /* Dump one CTF archive member.  */
@@ -4093,11 +4135,14 @@ dump_ctf_archive_member (ctf_file_t *ctf, const char *name, void *arg)
 
       if (ctf_errno (ctf))
 	{
-	  non_fatal (_("Iteration failed: %s, %s\n"), *thing,
+	  non_fatal (_("Iteration failed: %s, %s"), *thing,
 		   ctf_errmsg (ctf_errno (ctf)));
 	  break;
 	}
     }
+
+  dump_ctf_errs (ctf);
+
   return 0;
 }
 
@@ -4126,7 +4171,8 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name)
   ctfsect = make_ctfsect (sect_name, ctfdata, ctfsize);
   if ((ctfa = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
     {
-      non_fatal (_("CTF open failure: %s\n"), ctf_errmsg (err));
+      dump_ctf_errs (NULL);
+      non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
       bfd_fatal (bfd_get_filename (abfd));
     }
 
@@ -4135,7 +4181,8 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name)
       ctfsect = make_ctfsect (parent_name, parentdata, parentsize);
       if ((parenta = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
 	{
-	  non_fatal (_("CTF open failure: %s\n"), ctf_errmsg (err));
+	  dump_ctf_errs (NULL);
+	  non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
 	  bfd_fatal (bfd_get_filename (abfd));
 	}
 
@@ -4149,7 +4196,8 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name)
      put CTFs and their parents in archives together.)  */
   if ((parent = ctf_arc_open_by_name (lookparent, NULL, &err)) == NULL)
     {
-      non_fatal (_("CTF open failure: %s\n"), ctf_errmsg (err));
+      dump_ctf_errs (NULL);
+      non_fatal (_("CTF open failure: %s"), ctf_errmsg (err));
       bfd_fatal (bfd_get_filename (abfd));
     }
 
@@ -4162,6 +4210,11 @@ dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name)
   free (parentdata);
   free (ctfdata);
 }
+#else
+static void
+dump_ctf (bfd *abfd ATTRIBUTE_UNUSED, const char *sect_name ATTRIBUTE_UNUSED,
+	  const char *parent_name ATTRIBUTE_UNUSED) {}
+#endif
 
 
 static void
@@ -4242,10 +4295,10 @@ dump_section (bfd *abfd, asection *section, void *dummy ATTRIBUTE_UNUSED)
   int count;
   int width;
 
-  if ((section->flags & SEC_HAS_CONTENTS) == 0)
+  if (! process_section_p (section))
     return;
 
-  if (! process_section_p (section))
+  if ((section->flags & SEC_HAS_CONTENTS) == 0)
     return;
 
   if ((datasize = bfd_section_size (section)) == 0)
@@ -5343,6 +5396,7 @@ main (int argc, char **argv)
 	case OPTION_DWARF_CHECK:
 	  dwarf_check = TRUE;
 	  break;
+#ifdef ENABLE_LIBCTF
 	case OPTION_CTF:
 	  dump_ctf_section_info = TRUE;
 	  dump_ctf_section_name = xstrdup (optarg);
@@ -5351,6 +5405,7 @@ main (int argc, char **argv)
 	case OPTION_CTF_PARENT:
 	  dump_ctf_parent_name = xstrdup (optarg);
 	  break;
+#endif
 	case 'G':
 	  dump_stab_section_info = TRUE;
 	  seenflag = TRUE;

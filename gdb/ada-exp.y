@@ -1158,7 +1158,7 @@ get_symbol_field_type (struct symbol *sym, char *encoded_field_name)
 
       fieldno = ada_get_field_index (type, field_name, 1);
       if (fieldno >= 0)
-        return TYPE_FIELD_TYPE (type, fieldno);
+        return type->field (fieldno).type ();
 
       subfield_name = field_name;
       while (*subfield_name != '\0' && *subfield_name != '.' 
@@ -1173,7 +1173,7 @@ get_symbol_field_type (struct symbol *sym, char *encoded_field_name)
       if (fieldno < 0)
         return NULL;
 
-      type = TYPE_FIELD_TYPE (type, fieldno);
+      type = type->field (fieldno).type ();
       field_name = subfield_name;
     }
 
@@ -1386,7 +1386,7 @@ convert_char_literal (struct type *type, LONGEST val)
   if (type == NULL)
     return val;
   type = check_typedef (type);
-  if (TYPE_CODE (type) != TYPE_CODE_ENUM)
+  if (type->code () != TYPE_CODE_ENUM)
     return val;
 
   if ((val >= 'a' && val <= 'z') || (val >= '0' && val <= '9'))
@@ -1394,7 +1394,7 @@ convert_char_literal (struct type *type, LONGEST val)
   else
     xsnprintf (name, sizeof (name), "QU%02x", (int) val);
   size_t len = strlen (name);
-  for (f = 0; f < TYPE_NFIELDS (type); f += 1)
+  for (f = 0; f < type->num_fields (); f += 1)
     {
       /* Check the suffix because an enum constant in a package will
 	 have a name like "pkg__QUxx".  This is safe enough because we

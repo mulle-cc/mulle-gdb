@@ -1521,11 +1521,6 @@ read_xcoff_symtab (struct objfile *objfile, legacy_psymtab *pst)
     }
 }
 
-#define	SYMBOL_DUP(SYMBOL1, SYMBOL2)	\
-  (SYMBOL2) = new (&objfile->objfile_obstack) symbol (); \
-  *(SYMBOL2) = *(SYMBOL1);
-
-
 #define	SYMNAME_ALLOC(NAME, ALLOCED)	\
   ((ALLOCED) ? (NAME) : obstack_strdup (&objfile->objfile_obstack, \
 					(NAME)))
@@ -1561,8 +1556,6 @@ process_xcoff_symbol (struct coff_symbol *cs, struct objfile *objfile)
   if (name[0] == '.')
     ++name;
 
-  initialize_objfile_symbol (sym);
-
   /* default assumptions */
   SET_SYMBOL_VALUE_ADDRESS (sym, cs->c_value + off);
   SYMBOL_DOMAIN (sym) = VAR_DOMAIN;
@@ -1578,7 +1571,7 @@ process_xcoff_symbol (struct coff_symbol *cs, struct objfile *objfile)
       SYMBOL_TYPE (sym) = objfile_type (objfile)->nodebug_text_symbol;
 
       SYMBOL_ACLASS_INDEX (sym) = LOC_BLOCK;
-      SYMBOL_DUP (sym, sym2);
+      sym2 = new (&objfile->objfile_obstack) symbol (*sym);
 
       if (cs->c_sclass == C_EXT || C_WEAKEXT)
 	add_symbol_to_list (sym2, get_global_symbols ());
@@ -2045,8 +2038,7 @@ xcoff_end_psymtab (struct objfile *objfile, legacy_psymtab *pst,
       && pst->n_global_syms == 0
       && pst->n_static_syms == 0)
     {
-      /* Throw away this psymtab, it's empty.  We can't deallocate it, since
-         it is on the obstack, but we can forget to chain it on the list.  */
+      /* Throw away this psymtab, it's empty.  */
       /* Empty psymtabs happen as a result of header files which don't have
          any symbols in them.  There can be a lot of them.  */
 
@@ -2121,7 +2113,6 @@ static void
 scan_xcoff_symtab (minimal_symbol_reader &reader,
 		   struct objfile *objfile)
 {
-  struct gdbarch *gdbarch = objfile->arch ();
   CORE_ADDR toc_offset = 0;	/* toc offset value in data section.  */
   const char *filestring = NULL;
 
@@ -2584,10 +2575,6 @@ scan_xcoff_symtab (minimal_symbol_reader &reader,
 	    switch (p[1])
 	      {
 	      case 'S':
-		if (gdbarch_static_transform_name_p (gdbarch))
-		  namestring = gdbarch_static_transform_name
-				 (gdbarch, namestring);
-
 		add_psymbol_to_list (gdb::string_view (namestring,
 						       p - namestring),
 				     true, VAR_DOMAIN, LOC_STATIC,

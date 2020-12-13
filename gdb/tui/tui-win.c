@@ -298,16 +298,6 @@ tui_update_variables ()
   return need_redraw;
 }
 
-static void
-set_tui_cmd (const char *args, int from_tty)
-{
-}
-
-static void
-show_tui_cmd (const char *args, int from_tty)
-{
-}
-
 static struct cmd_list_element *tuilist;
 
 struct cmd_list_element **
@@ -670,21 +660,18 @@ tui_partial_win_by_name (gdb::string_view name)
 {
   struct tui_win_info *best = nullptr;
 
-  if (name != NULL)
+  for (tui_win_info *item : all_tui_windows ())
     {
-      for (tui_win_info *item : all_tui_windows ())
-	{
-	  const char *cur_name = item->name ();
+      const char *cur_name = item->name ();
 
-	  if (name == cur_name)
-	    return item;
-	  if (startswith (cur_name, name))
-	    {
-	      if (best != nullptr)
-		error (_("Window name \"%*s\" is ambiguous"),
-		       (int) name.size (), name.data ());
-	      best = item;
-	    }
+      if (name == cur_name)
+	return item;
+      if (startswith (cur_name, name))
+	{
+	  if (best != nullptr)
+	    error (_("Window name \"%*s\" is ambiguous"),
+		   (int) name.size (), name.data ());
+	  best = item;
 	}
     }
 
@@ -762,6 +749,8 @@ tui_refresh_all_command (const char *arg, int from_tty)
 
   tui_refresh_all_win ();
 }
+
+#define DEFAULT_TAB_LEN         8
 
 /* The tab width that should be used by the TUI.  */
 
@@ -929,7 +918,7 @@ tui_win_info::max_height () const
 /* See tui-data.h.  */
 
 int
-tui_gen_win_info::max_width () const
+tui_win_info::max_width () const
 {
   return tui_term_width () - 2;
 }
@@ -1004,14 +993,14 @@ _initialize_tui_win ()
 
   /* Define the classes of commands.
      They will appear in the help list in the reverse of this order.  */
-  add_prefix_cmd ("tui", class_tui, set_tui_cmd,
-                  _("TUI configuration variables."),
-		  &tui_setlist, "set tui ",
-		  0 /* allow-unknown */, &setlist);
-  add_prefix_cmd ("tui", class_tui, show_tui_cmd,
-                  _("TUI configuration variables."),
-		  &tui_showlist, "show tui ",
-		  0 /* allow-unknown */, &showlist);
+  add_basic_prefix_cmd ("tui", class_tui,
+			_("TUI configuration variables."),
+			&tui_setlist, "set tui ",
+			0 /* allow-unknown */, &setlist);
+  add_show_prefix_cmd ("tui", class_tui,
+		       _("TUI configuration variables."),
+		       &tui_showlist, "show tui ",
+		       0 /* allow-unknown */, &showlist);
 
   add_com ("refresh", class_tui, tui_refresh_all_command,
            _("Refresh the terminal display."));

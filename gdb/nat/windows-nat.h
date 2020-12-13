@@ -93,6 +93,11 @@ struct windows_thread_info
      breakpoint.  This is used to offset the PC when needed.  */
   bool stopped_at_software_breakpoint = false;
 
+  /* True if we've adjusted the PC after hitting a software
+     breakpoint, false otherwise.  This lets us avoid multiple
+     adjustments if the registers are read multiple times.  */
+  bool pc_adjusted = false;
+
   /* The name of the thread, allocated by xmalloc.  */
   gdb::unique_xmalloc_ptr<char> name;
 };
@@ -175,9 +180,6 @@ extern enum gdb_signal last_sig;
    stop.  */
 extern DEBUG_EVENT current_event;
 
-/* Info on currently selected thread */
-extern windows_thread_info *current_windows_thread;
-
 /* The ID of the thread for which we anticipate a stop event.
    Normally this is -1, meaning we'll accept an event in any
    thread.  */
@@ -213,6 +215,8 @@ extern std::vector<pending_stop> pending_stops;
 extern EXCEPTION_RECORD siginfo_er;
 
 #ifdef __x86_64__
+/* The target is a WOW64 process */
+extern bool wow64_process;
 /* Ignore first breakpoint exception of WOW64 process */
 extern bool ignore_first_breakpoint;
 #endif

@@ -395,7 +395,7 @@ spu_elf_relink (void)
 
   memcpy (argv, my_argv, my_argc * sizeof (*argv));
   argv[my_argc++] = "--no-auto-overlay";
-  if (tmp_file_list->name == auto_overlay_file)
+  if (tmp_file_list != NULL && tmp_file_list->name == auto_overlay_file)
     argv[my_argc - 1] = concat (argv[my_argc - 1], "=",
 				auto_overlay_file, (const char *) NULL);
   argv[my_argc++] = "-T";
@@ -500,7 +500,7 @@ embedded_spu_file (lang_input_statement_type *entry, const char *flags)
     return FALSE;
 
   /* Use the filename as the symbol marking the program handle struct.  */
-  sym = base_name (entry->the_bfd->filename);
+  sym = base_name (bfd_get_filename (entry->the_bfd));
 
   handle = xstrdup (sym);
   for (p = handle; *p; ++p)
@@ -532,7 +532,7 @@ embedded_spu_file (lang_input_statement_type *entry, const char *flags)
   cmd[0] = EMBEDSPU;
   cmd[1] = flags;
   cmd[2] = handle;
-  cmd[3] = entry->the_bfd->filename;
+  cmd[3] = bfd_get_filename (entry->the_bfd);
   cmd[4] = oname;
   cmd[5] = NULL;
   if (verbose)

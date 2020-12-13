@@ -23,6 +23,8 @@
 
 #define DEFAULT_MEMORY_REGION   "*default*"
 
+#define SECTION_NAME_MAP_LENGTH (16)
+
 typedef enum
 {
   lang_input_file_is_l_enum,
@@ -269,7 +271,7 @@ struct lang_input_statement_flags
   /* Set if reloading an archive or --as-needed lib.  */
   unsigned int reload : 1;
 
-#ifdef ENABLE_PLUGINS
+#if BFD_SUPPORTS_PLUGINS
   /* Set if the file was claimed by a plugin.  */
   unsigned int claimed : 1;
 
@@ -278,7 +280,7 @@ struct lang_input_statement_flags
 
   /* Set if added by the lto plugin add_input_file callback.  */
   unsigned int lto_output : 1;
-#endif /* ENABLE_PLUGINS */
+#endif /* BFD_SUPPORTS_PLUGINS */
 
   /* Head of list of pushed flags.  */
   struct lang_input_statement_flags *pushed;
@@ -293,6 +295,9 @@ typedef struct lang_input_statement_struct
      Usually the same as filename, but for a file spec'd with
      -l this is the -l switch itself rather than the filename.  */
   const char *local_sym_name;
+  /* Extra search path. Used to find a file relative to the
+     directory of the current linker script.  */
+  const char *extra_search_path;
 
   bfd *the_bfd;
 
@@ -508,6 +513,8 @@ extern bfd_boolean entry_from_cmdline;
 extern lang_statement_list_type file_chain;
 extern lang_statement_list_type input_file_chain;
 
+extern struct bfd_elf_dynamic_list **current_dynamic_list_p;
+
 extern int lang_statement_iteration;
 extern struct asneeded_minfo **asneeded_list_tail;
 
@@ -668,7 +675,8 @@ extern struct bfd_elf_version_deps *lang_add_vers_depend
   (struct bfd_elf_version_deps *, const char *);
 extern void lang_register_vers_node
   (const char *, struct bfd_elf_version_tree *, struct bfd_elf_version_deps *);
-extern void lang_append_dynamic_list (struct bfd_elf_version_expr *);
+extern void lang_append_dynamic_list (struct bfd_elf_dynamic_list **,
+				      struct bfd_elf_version_expr *);
 extern void lang_append_dynamic_list_cpp_typeinfo (void);
 extern void lang_append_dynamic_list_cpp_new (void);
 extern void lang_add_unique
@@ -697,5 +705,8 @@ lang_print_memory_usage (void);
 
 extern void
 lang_add_gc_name (const char *);
+
+extern bfd_boolean
+print_one_symbol (struct bfd_link_hash_entry *hash_entry, void *ptr);
 
 #endif

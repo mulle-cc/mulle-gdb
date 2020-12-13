@@ -957,8 +957,6 @@ static int
 open_symbol_file_object (int from_tty)
 {
   CORE_ADDR lm, l_name;
-  gdb::unique_xmalloc_ptr<char> filename;
-  int errcode;
   struct link_map_offsets *lmo = svr4_fetch_link_map_offsets ();
   struct type *ptr_type = builtin_type (target_gdbarch ())->builtin_data_ptr;
   int l_name_size = TYPE_LENGTH (ptr_type);
@@ -993,12 +991,12 @@ open_symbol_file_object (int from_tty)
     return 0;		/* No filename.  */
 
   /* Now fetch the filename from target memory.  */
-  target_read_string (l_name, &filename, SO_NAME_MAX_PATH_SIZE - 1, &errcode);
+  gdb::unique_xmalloc_ptr<char> filename
+    = target_read_string (l_name, SO_NAME_MAX_PATH_SIZE - 1);
 
-  if (errcode)
+  if (filename == nullptr)
     {
-      warning (_("failed to read exec filename from attached file: %s"),
-	       safe_strerror (errcode));
+      warning (_("failed to read exec filename from attached file"));
       return 0;
     }
 
@@ -1297,9 +1295,6 @@ svr4_read_so_list (svr4_info *info, CORE_ADDR lm, CORE_ADDR prev_lm,
 
   for (; lm != 0; prev_lm = lm, lm = next_lm)
     {
-      int errcode;
-      gdb::unique_xmalloc_ptr<char> buffer;
-
       so_list_up newobj (XCNEW (struct so_list));
 
       lm_info_svr4 *li = lm_info_read (lm).release ();
@@ -1330,17 +1325,16 @@ svr4_read_so_list (svr4_info *info, CORE_ADDR lm, CORE_ADDR prev_lm,
 	}
 
       /* Extract this shared object's name.  */
-      target_read_string (li->l_name, &buffer, SO_NAME_MAX_PATH_SIZE - 1,
-			  &errcode);
-      if (errcode != 0)
+      gdb::unique_xmalloc_ptr<char> buffer
+	= target_read_string (li->l_name, SO_NAME_MAX_PATH_SIZE - 1);
+      if (buffer == nullptr)
 	{
 	  /* If this entry's l_name address matches that of the
 	     inferior executable, then this is not a normal shared
 	     object, but (most likely) a vDSO.  In this case, silently
 	     skip it; otherwise emit a warning. */
 	  if (first_l_name == 0 || li->l_name != first_l_name)
-	    warning (_("Can't read pathname for load map: %s."),
-		     safe_strerror (errcode));
+	    warning (_("Can't read pathname for load map."));
 	  continue;
 	}
 
@@ -1537,7 +1531,6 @@ svr4_current_sos (void)
 CORE_ADDR
 svr4_fetch_objfile_link_map (struct objfile *objfile)
 {
-  struct so_list *so;
   struct svr4_info *info = get_svr4_info (objfile->pspace);
 
   /* Cause svr4_current_sos() to be run if it hasn't been already.  */
@@ -1555,7 +1548,7 @@ svr4_fetch_objfile_link_map (struct objfile *objfile)
 
   /* The other link map addresses may be found by examining the list
      of shared libraries.  */
-  for (so = master_so_list (); so; so = so->next)
+  for (struct so_list *so : current_program_space->solibs ())
     if (so->objfile == objfile)
       {
 	lm_info_svr4 *li = (lm_info_svr4 *) so->lm_info;
@@ -2307,7 +2300,6 @@ enable_break (struct svr4_info *info, int from_tty)
       CORE_ADDR load_addr = 0;
       int load_addr_found = 0;
       int loader_found_in_list = 0;
-      struct so_list *so;
       struct target_ops *tmp_bfd_target;
 
       sym_addr = 0;
@@ -2340,8 +2332,7 @@ enable_break (struct svr4_info *info, int from_tty)
 
       /* On a running target, we can get the dynamic linker's base
          address from the shared library table.  */
-      so = master_so_list ();
-      while (so)
+      for (struct so_list *so : current_program_space->solibs ())
 	{
 	  if (svr4_same_1 (interp_name, so->so_original_name))
 	    {
@@ -2350,7 +2341,6 @@ enable_break (struct svr4_info *info, int from_tty)
 	      load_addr = lm_addr_check (so, tmp_bfd.get ());
 	      break;
 	    }
-	  so = so->next;
 	}
 
       /* If we were not able to find the base address of the loader

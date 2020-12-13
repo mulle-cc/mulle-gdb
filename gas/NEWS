@@ -1,5 +1,21 @@
 -*- text -*-
 
+* Removed --reduce-memory-overheads and --hash-size as gas now
+  uses hash tables that can be expand and shrink automatically.
+
+* Add {disp16} pseudo prefix to x86 assembler.
+
+* Add support for Intel AMX instructions.
+
+* Configure with --enable-x86-used-note by default for Linux/x86.
+
+Changes in 2.35:
+
+* X86 NaCl target support is removed.
+
+* Extend .symver directive to update visibility of the original symbol
+  and assign one original symbol to different versioned symbols.
+
 * Add support for Intel SERIALIZE and TSXLDTRK instructions.
 
 * Add -mlfence-after-load=, -mlfence-before-indirect-branch= and
@@ -9,6 +25,8 @@
 * Add --gdwarf-5 option to the assembler to generate DWARF 5 debug output
   (if such output is being generated).  Added the ability to generate
   version 5 .debug_line sections.
+
+* Add -mbig-obj support to i386 MingW targets.
 
 Changes in 2.34:
 

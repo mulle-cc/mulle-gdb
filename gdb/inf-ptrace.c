@@ -68,42 +68,6 @@ typedef std::unique_ptr<struct target_ops, target_unpusher> target_unpush_up;
 inf_ptrace_target::~inf_ptrace_target ()
 {}
 
-#ifdef PT_GET_PROCESS_STATE
-
-/* Target hook for follow_fork.  On entry and at return inferior_ptid is
-   the ptid of the followed inferior.  */
-
-bool
-inf_ptrace_target::follow_fork (bool follow_child, bool detach_fork)
-{
-  if (!follow_child)
-    {
-      struct thread_info *tp = inferior_thread ();
-      pid_t child_pid = tp->pending_follow.value.related_pid.pid ();
-
-      /* Breakpoints have already been detached from the child by
-	 infrun.c.  */
-
-      if (ptrace (PT_DETACH, child_pid, (PTRACE_TYPE_ARG3)1, 0) == -1)
-	perror_with_name (("ptrace"));
-    }
-
-  return false;
-}
-
-int
-inf_ptrace_target::insert_fork_catchpoint (int pid)
-{
-  return 0;
-}
-
-int
-inf_ptrace_target::remove_fork_catchpoint (int pid)
-{
-  return 0;
-}
-
-#endif /* PT_GET_PROCESS_STATE */
 
 
 /* Prepare to be traced.  */
@@ -126,9 +90,6 @@ inf_ptrace_target::create_inferior (const char *exec_file,
 				    const std::string &allargs,
 				    char **env, int from_tty)
 {
-  pid_t pid;
-  ptid_t ptid;
-
   /* Do not change either targets above or the same target if already present.
      The reason is the target stack is shared across multiple inferiors.  */
   int ops_already_pushed = target_is_pushed (this);
@@ -141,14 +102,15 @@ inf_ptrace_target::create_inferior (const char *exec_file,
       unpusher.reset (this);
     }
 
-  pid = fork_inferior (exec_file, allargs, env, inf_ptrace_me, NULL,
-		       NULL, NULL, NULL);
+  pid_t pid = fork_inferior (exec_file, allargs, env, inf_ptrace_me, NULL,
+			     NULL, NULL, NULL);
 
-  ptid = ptid_t (pid);
+  ptid_t ptid (pid);
   /* We have something that executes now.  We'll be running through
      the shell at this point (if startup-with-shell is true), but the
      pid shouldn't change.  */
-  add_thread_silent (this, ptid);
+  thread_info *thr = add_thread_silent (this, ptid);
+  switch_to_thread (thr);
 
   unpusher.release ();
 
@@ -158,23 +120,6 @@ inf_ptrace_target::create_inferior (const char *exec_file,
      the inferior has been started up.  */
   target_post_startup_inferior (ptid);
 }
-
-#ifdef PT_GET_PROCESS_STATE
-
-void
-inf_ptrace_target::post_startup_inferior (ptid_t pid)
-{
-  ptrace_event_t pe;
-
-  /* Set the initial event mask.  */
-  memset (&pe, 0, sizeof pe);
-  pe.pe_set_event |= PTRACE_FORK;
-  if (ptrace (PT_SET_EVENT_MASK, pid.pid (),
-	      (PTRACE_TYPE_ARG3)&pe, sizeof pe) == -1)
-    perror_with_name (("ptrace"));
-}
-
-#endif
 
 /* Clean up a rotting corpse of an inferior after it died.  */
 
@@ -243,34 +188,18 @@ inf_ptrace_target::attach (const char *args, int from_tty)
   inf = current_inferior ();
   inferior_appeared (inf, pid);
   inf->attach_flag = 1;
-  inferior_ptid = ptid_t (pid);
 
   /* Always add a main thread.  If some target extends the ptrace
      target, it should decorate the ptid later with more info.  */
-  thread_info *thr = add_thread_silent (this, inferior_ptid);
+  thread_info *thr = add_thread_silent (this, ptid_t (pid));
+  switch_to_thread (thr);
+
   /* Don't consider the thread stopped until we've processed its
      initial SIGSTOP stop.  */
   set_executing (this, thr->ptid, true);
 
   unpusher.release ();
 }
-
-#ifdef PT_GET_PROCESS_STATE
-
-void
-inf_ptrace_target::post_attach (int pid)
-{
-  ptrace_event_t pe;
-
-  /* Set the initial event mask.  */
-  memset (&pe, 0, sizeof pe);
-  pe.pe_set_event |= PTRACE_FORK;
-  if (ptrace (PT_SET_EVENT_MASK, pid,
-	      (PTRACE_TYPE_ARG3)&pe, sizeof pe) == -1)
-    perror_with_name (("ptrace"));
-}
-
-#endif
 
 /* Detach from the inferior.  If FROM_TTY is non-zero, be chatty about it.  */
 
@@ -302,7 +231,7 @@ inf_ptrace_target::detach (inferior *inf, int from_tty)
 void
 inf_ptrace_target::detach_success (inferior *inf)
 {
-  inferior_ptid = null_ptid;
+  switch_to_no_thread ();
   detach_inferior (inf);
 
   maybe_unpush_target ();
@@ -418,48 +347,10 @@ inf_ptrace_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	}
 
       /* Ignore terminated detached child processes.  */
-      if (!WIFSTOPPED (status) && pid != inferior_ptid.pid ())
+      if (!WIFSTOPPED (status) && find_inferior_pid (this, pid) == nullptr)
 	pid = -1;
     }
   while (pid == -1);
-
-#ifdef PT_GET_PROCESS_STATE
-  if (WIFSTOPPED (status))
-    {
-      ptrace_state_t pe;
-      pid_t fpid;
-
-      if (ptrace (PT_GET_PROCESS_STATE, pid,
-		  (PTRACE_TYPE_ARG3)&pe, sizeof pe) == -1)
-	perror_with_name (("ptrace"));
-
-      switch (pe.pe_report_event)
-	{
-	case PTRACE_FORK:
-	  ourstatus->kind = TARGET_WAITKIND_FORKED;
-	  ourstatus->value.related_pid = ptid_t (pe.pe_other_pid);
-
-	  /* Make sure the other end of the fork is stopped too.  */
-	  fpid = waitpid (pe.pe_other_pid, &status, 0);
-	  if (fpid == -1)
-	    perror_with_name (("waitpid"));
-
-	  if (ptrace (PT_GET_PROCESS_STATE, fpid,
-		      (PTRACE_TYPE_ARG3)&pe, sizeof pe) == -1)
-	    perror_with_name (("ptrace"));
-
-	  gdb_assert (pe.pe_report_event == PTRACE_FORK);
-	  gdb_assert (pe.pe_other_pid == pid);
-	  if (fpid == inferior_ptid.pid ())
-	    {
-	      ourstatus->value.related_pid = ptid_t (pe.pe_other_pid);
-	      return ptid_t (fpid);
-	    }
-
-	  return ptid_t (pid);
-	}
-    }
-#endif
 
   store_waitstatus (ourstatus, status);
   return ptid_t (pid);

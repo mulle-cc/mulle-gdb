@@ -303,12 +303,6 @@
 /* Define to 1 if `st_blocks' is a member of `struct stat'. */
 #undef HAVE_STRUCT_STAT_ST_BLOCKS
 
-/* Define to 1 if `fs_base' is a member of `struct user_regs_struct'. */
-#undef HAVE_STRUCT_USER_REGS_STRUCT_FS_BASE
-
-/* Define to 1 if `gs_base' is a member of `struct user_regs_struct'. */
-#undef HAVE_STRUCT_USER_REGS_STRUCT_GS_BASE
-
 /* Define to 1 if the target supports __sync_*_compare_and_swap */
 #undef HAVE_SYNC_BUILTINS
 
@@ -383,6 +377,9 @@
 
 /* Define to 1 if `vfork' works. */
 #undef HAVE_WORKING_VFORK
+
+/* Define to 1 if you have the <ws2tcpip.h> header file. */
+#undef HAVE_WS2TCPIP_H
 
 /* Define to the address where bug reports for this package should be sent. */
 #undef PACKAGE_BUGREPORT
@@ -497,6 +494,9 @@
 
 /* Define to 1 if you need to in order for `stat' and other things to work. */
 #undef _POSIX_SOURCE
+
+/* Use structured /proc on Solaris. */
+#undef _STRUCTURED_PROC
 
 /* Define to `int' if <sys/types.h> does not define. */
 #undef pid_t

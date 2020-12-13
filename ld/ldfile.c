@@ -34,10 +34,10 @@
 #include "ldemul.h"
 #include "libiberty.h"
 #include "filenames.h"
-#ifdef ENABLE_PLUGINS
+#if BFD_SUPPORTS_PLUGINS
 #include "plugin-api.h"
 #include "plugin.h"
-#endif /* ENABLE_PLUGINS */
+#endif /* BFD_SUPPORTS_PLUGINS */
 
 bfd_boolean ldfile_assumed_script = FALSE;
 const char *ldfile_output_machine_name = "";
@@ -142,13 +142,15 @@ ldfile_try_open_bfd (const char *attempt,
       return FALSE;
     }
 
+  track_dependency_files (attempt);
+
   /* Linker needs to decompress sections.  */
   entry->the_bfd->flags |= BFD_DECOMPRESS;
 
   /* This is a linker input BFD.  */
   entry->the_bfd->is_linker_input = 1;
 
-#ifdef ENABLE_PLUGINS
+#if BFD_SUPPORTS_PLUGINS
   if (entry->flags.lto_output)
     entry->the_bfd->lto_output = 1;
 #endif
@@ -240,8 +242,8 @@ ldfile_try_open_bfd (const char *attempt,
 				skip = 1;
 			    }
 			  free (arg1);
-			  if (arg2) free (arg2);
-			  if (arg3) free (arg3);
+			  free (arg2);
+			  free (arg3);
 			  break;
 			case NAME:
 			case LNAME:
@@ -250,8 +252,7 @@ ldfile_try_open_bfd (const char *attempt,
 			  free (yylval.name);
 			  break;
 			case INT:
-			  if (yylval.bigint.str)
-			    free (yylval.bigint.str);
+			  free (yylval.bigint.str);
 			  break;
 			}
 		      token = yylex ();
@@ -303,7 +304,7 @@ ldfile_try_open_bfd (const char *attempt,
 	}
     }
  success:
-#ifdef ENABLE_PLUGINS
+#if BFD_SUPPORTS_PLUGINS
   /* If plugins are active, they get first chance to claim
      any successfully-opened input file.  We skip archives
      here; the plugin wants us to offer it the individual
@@ -317,7 +318,7 @@ ldfile_try_open_bfd (const char *attempt,
       && !no_more_claiming
       && bfd_check_format (entry->the_bfd, bfd_object))
     plugin_maybe_claim (entry);
-#endif /* ENABLE_PLUGINS */
+#endif /* BFD_SUPPORTS_PLUGINS */
 
   /* It opened OK, the format checked out, and the plugins have had
      their chance to claim it, so this is success.  */
@@ -416,7 +417,24 @@ ldfile_open_file (lang_input_statement_type *entry)
       search_arch_type *arch;
       bfd_boolean found = FALSE;
 
-      /* Try to open <filename><suffix> or lib<filename><suffix>.a */
+      /* If extra_search_path is set, entry->filename is a relative path.
+	 Search the directory of the current linker script before searching
+	 other paths. */
+      if (entry->extra_search_path)
+	{
+	  char *path = concat (entry->extra_search_path, slash, entry->filename,
+			       (const char *)0);
+	  if (ldfile_try_open_bfd (path, entry))
+	    {
+	      entry->filename = path;
+	      entry->flags.search_dirs = FALSE;
+	      return;
+	    }
+
+	  free (path);
+	}
+
+      /* Try to open <filename><suffix> or lib<filename><suffix>.a.  */
       for (arch = search_arch_head; arch != NULL; arch = arch->next)
 	{
 	  found = ldfile_open_file_search (arch->name, entry, "lib", ".a");
@@ -658,6 +676,8 @@ ldfile_open_command_file_1 (const char *name, enum script_open_style open_how)
       einfo (_("%F%P: cannot open linker script file %s: %E\n"), name);
       return;
     }
+
+  track_dependency_files (name);
 
   lex_push_file (ldlex_input_stack, name, sysrooted);
 

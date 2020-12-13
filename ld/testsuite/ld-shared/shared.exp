@@ -65,6 +65,10 @@ set tmpdir tmpdir
 set SHCFLAG ""
 set shared_needs_pic "no"
 
+# Disable all sanitizers.
+set old_CFLAGS "$CFLAGS"
+append CFLAGS " $NOSANITIZE_CFLAGS"
+
 if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 
     # AIX shared libraries do not seem to support useful features,
@@ -132,6 +136,9 @@ proc shared_test { progname testname main sh1 sh2 dat args } {
     set shared -shared
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set shared "-bM:SRE -bE:$tmpdir/xcoff.exp"
+    }
+    if { [is_elf_format] && [check_shared_lib_support] } {
+	append shared " -Wl,-z,notext"
     }
     if {![ld_link $CC $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
         fail "$testname"
@@ -339,6 +346,8 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/main.c $tmpdir/m
 	unresolved "shared (PIC main)"
     }
 }
+
+set CFLAGS "$old_CFLAGS"
 
 if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
     # Remove the temporary directory.

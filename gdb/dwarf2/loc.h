@@ -23,7 +23,7 @@
 #include "dwarf2/expr.h"
 
 struct symbol_computed_ops;
-struct objfile;
+struct dwarf2_per_objfile;
 struct dwarf2_per_cu_data;
 struct dwarf2_loclist_baton;
 struct agent_expr;
@@ -61,7 +61,8 @@ struct value *dwarf2_evaluate_loc_desc (struct type *type,
 					struct frame_info *frame,
 					const gdb_byte *data,
 					size_t size,
-					struct dwarf2_per_cu_data *per_cu);
+					dwarf2_per_cu_data *per_cu,
+					dwarf2_per_objfile *per_objfile);
 
 /* A chain of addresses that might be needed to resolve a dynamic
    property.  */
@@ -73,7 +74,7 @@ struct property_addr_info
   struct type *type;
 
   /* If not NULL, a buffer containing the object's value.  */
-  const gdb_byte *valaddr;
+  gdb::array_view<const gdb_byte> valaddr;
 
   /* The address of that object.  */
   CORE_ADDR addr;
@@ -92,12 +93,16 @@ struct property_addr_info
    be NULL.
 
    Returns true if PROP could be converted and the static value is passed
-   back into VALUE, otherwise returns false.  */
+   back into VALUE, otherwise returns false.
+
+   If PUSH_INITIAL_VALUE is true, then the top value of ADDR_STACK
+   will be pushed before evaluating a location expression.  */
 
 bool dwarf2_evaluate_property (const struct dynamic_prop *prop,
 			       struct frame_info *frame,
 			       const struct property_addr_info *addr_stack,
-			       CORE_ADDR *value);
+			       CORE_ADDR *value,
+			       bool push_initial_value = false);
 
 /* A helper for the compiler interface that compiles a single dynamic
    property to C code.
@@ -142,6 +147,9 @@ struct dwarf2_locexpr_baton
      directly.  */
   bool is_reference;
 
+  /* The objfile that was used when creating this.  */
+  dwarf2_per_objfile *per_objfile;
+
   /* The compilation unit containing the symbol whose location
      we're computing.  */
   struct dwarf2_per_cu_data *per_cu;
@@ -158,6 +166,9 @@ struct dwarf2_loclist_baton
 
   /* Length of the location list.  */
   size_t size;
+
+  /* The objfile that was used when creating this.  */
+  dwarf2_per_objfile *per_objfile;
 
   /* The compilation unit containing the symbol whose location
      we're computing.  */

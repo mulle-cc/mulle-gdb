@@ -75,7 +75,7 @@ AC_CHECK_HEADERS(termios.h sys/reg.h string.h dnl
 		 sys/procfs.h linux/elf.h dnl
 		 fcntl.h signal.h sys/file.h dnl
 		 sys/ioctl.h netinet/in.h sys/socket.h netdb.h dnl
-		 netinet/tcp.h arpa/inet.h)
+		 netinet/tcp.h arpa/inet.h ws2tcpip.h)
 AC_FUNC_FORK
 AC_CHECK_FUNCS(pread pwrite pread64)
 
@@ -145,17 +145,13 @@ libiberty_INIT
 
 AC_CHECK_DECLS([perror, vasprintf, vsnprintf])
 
-# See if <sys/user.h> supports the %fs_base and %gs_bas amd64 segment registers.
-# Older amd64 Linux's don't have the fs_base and gs_base members of
-# `struct user_regs_struct'.
-AC_CHECK_MEMBERS([struct user_regs_struct.fs_base, struct user_regs_struct.gs_base],
-     [], [], [#include <sys/types.h>
-#include <sys/user.h>])
-
-
 AC_CHECK_TYPES(socklen_t, [], [],
 [#include <sys/types.h>
-#include <sys/socket.h>
+#if HAVE_SYS_SOCKET_H
+# include <sys/socket.h>
+#elif HAVE_WS2TCPIP_H
+# include <ws2tcpip.h>
+#endif
 ])
 
 case "${target}" in
@@ -233,10 +229,6 @@ if test "${srv_mingwce}" = "yes"; then
 elif test "${srv_mingw}" = "yes"; then
   # WIN32APILIBS is set by GDB_AC_COMMON.
   LIBS="$LIBS $WIN32APILIBS"
-elif test "${srv_qnx}" = "yes"; then
-  LIBS="$LIBS -lsocket"
-elif test "${srv_lynxos}" = "yes"; then
-  LIBS="$LIBS -lnetinet"
 fi
 
 if test "${srv_linux_usrregs}" = "yes"; then

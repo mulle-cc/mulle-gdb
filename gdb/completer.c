@@ -155,7 +155,7 @@ enum explicit_location_match_type
    but it does affect how much stuff M-? lists.
    (2) If one of the matches contains a word break character, readline
    will quote it.  That's why we switch between
-   current_language->la_word_break_characters() and
+   current_language->word_break_characters () and
    gdb_completer_command_word_break_characters.  I'm not sure when
    we need this behavior (perhaps for funky characters in C++ 
    symbols?).  */
@@ -448,7 +448,7 @@ const char *
 advance_to_expression_complete_word_point (completion_tracker &tracker,
 					   const char *text)
 {
-  const char *brk_chars = current_language->la_word_break_characters ();
+  const char *brk_chars = current_language->word_break_characters ();
   return advance_to_completion_word (tracker, brk_chars, text);
 }
 
@@ -573,7 +573,7 @@ complete_files_symbols (completion_tracker &tracker,
 	  colon = p;
 	  symbol_start = p + 1;
 	}
-      else if (strchr (current_language->la_word_break_characters(), *p))
+      else if (strchr (current_language->word_break_characters (), *p))
 	symbol_start = p + 1;
     }
 
@@ -1090,7 +1090,7 @@ add_struct_fields (struct type *type, completion_list &output,
   const char *type_name = NULL;
 
   type = check_typedef (type);
-  for (i = 0; i < TYPE_NFIELDS (type); ++i)
+  for (i = 0; i < type->num_fields (); ++i)
     {
       if (i < TYPE_N_BASECLASSES (type))
 	add_struct_fields (TYPE_BASECLASS (type, i),
@@ -1103,10 +1103,10 @@ add_struct_fields (struct type *type, completion_list &output,
 			     fieldname, namelen))
 		output.emplace_back (xstrdup (TYPE_FIELD_NAME (type, i)));
 	    }
-	  else if (TYPE_CODE (TYPE_FIELD_TYPE (type, i)) == TYPE_CODE_UNION)
+	  else if (type->field (i).type ()->code () == TYPE_CODE_UNION)
 	    {
 	      /* Recurse into anonymous unions.  */
-	      add_struct_fields (TYPE_FIELD_TYPE (type, i),
+	      add_struct_fields (type->field (i).type (),
 				 output, fieldname, namelen);
 	    }
 	}
@@ -1120,7 +1120,7 @@ add_struct_fields (struct type *type, completion_list &output,
 	{
 	  if (!computed_type_name)
 	    {
-	      type_name = TYPE_NAME (type);
+	      type_name = type->name ();
 	      computed_type_name = 1;
 	    }
 	  /* Omit constructors from the completion list.  */
@@ -1156,13 +1156,13 @@ complete_expression (completion_tracker &tracker,
       for (;;)
 	{
 	  type = check_typedef (type);
-	  if (TYPE_CODE (type) != TYPE_CODE_PTR && !TYPE_IS_REFERENCE (type))
+	  if (type->code () != TYPE_CODE_PTR && !TYPE_IS_REFERENCE (type))
 	    break;
 	  type = TYPE_TARGET_TYPE (type);
 	}
 
-      if (TYPE_CODE (type) == TYPE_CODE_UNION
-	  || TYPE_CODE (type) == TYPE_CODE_STRUCT)
+      if (type->code () == TYPE_CODE_UNION
+	  || type->code () == TYPE_CODE_STRUCT)
 	{
 	  completion_list result;
 
@@ -1348,7 +1348,7 @@ complete_line_internal_1 (completion_tracker &tracker,
      strings, which leaves out the '-' and '.' character used in some
      commands.  */
   set_rl_completer_word_break_characters
-    (current_language->la_word_break_characters());
+    (current_language->word_break_characters ());
 
   /* Decide whether to complete on a list of gdb commands or on
      symbols.  */
@@ -1385,7 +1385,7 @@ complete_line_internal_1 (completion_tracker &tracker,
     }
   else
     {
-      c = lookup_cmd_1 (&p, cmdlist, &result_list, ignore_help_classes);
+      c = lookup_cmd_1 (&p, cmdlist, &result_list, NULL, ignore_help_classes);
     }
 
   /* Move p up to the next interesting thing.  */
@@ -1964,7 +1964,7 @@ default_completer_handle_brkchars (struct cmd_list_element *ignore,
 				   const char *text, const char *word)
 {
   set_rl_completer_word_break_characters
-    (current_language->la_word_break_characters ());
+    (current_language->word_break_characters ());
 }
 
 /* See definition in completer.h.  */
@@ -2327,15 +2327,11 @@ completion_result::~completion_result ()
 
 /* See completer.h  */
 
-completion_result::completion_result (completion_result &&rhs)
+completion_result::completion_result (completion_result &&rhs) noexcept
+  : match_list (rhs.match_list),
+    number_matches (rhs.number_matches)
 {
-  if (this == &rhs)
-    return;
-
-  reset_match_list ();
-  match_list = rhs.match_list;
   rhs.match_list = NULL;
-  number_matches = rhs.number_matches;
   rhs.number_matches = 0;
 }
 
@@ -2477,7 +2473,7 @@ skip_quoted_chars (const char *str, const char *quotechars,
     quotechars = gdb_completer_quote_characters;
 
   if (breakchars == NULL)
-    breakchars = current_language->la_word_break_characters();
+    breakchars = current_language->word_break_characters ();
 
   for (scan = str; *scan != '\0'; scan++)
     {

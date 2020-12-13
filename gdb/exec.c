@@ -37,6 +37,7 @@
 #include "gdb_bfd.h"
 #include "gcore.h"
 #include "source.h"
+#include "build-id.h"
 
 #include <fcntl.h>
 #include "readline/tilde.h"
@@ -177,10 +178,9 @@ exec_close (void)
 void
 exec_target::close ()
 {
-  struct program_space *ss;
   scoped_restore_current_program_space restore_pspace;
 
-  ALL_PSPACES (ss)
+  for (struct program_space *ss : program_spaces)
     {
       set_current_program_space (ss);
       clear_section_table (current_target_sections);
@@ -248,22 +248,64 @@ validate_exec_file (int from_tty)
   struct inferior *inf = current_inferior ();
   /* Try to determine a filename from the process itself.  */
   const char *pid_exec_file = target_pid_to_exec_file (inf->pid);
+  bool build_id_mismatch = false;
 
-  /* If wee cannot validate the exec file, return.  */
+  /* If we cannot validate the exec file, return.  */
   if (current_exec_file == NULL || pid_exec_file == NULL)
     return;
 
-  std::string exec_file_target (pid_exec_file);
+  /* Try validating via build-id, if available.  This is the most
+     reliable check.  */
 
-  /* In case the exec file is not local, exec_file_target has to point at
-     the target file system.  */
-  if (is_target_filename (current_exec_file) && !target_filesystem_is_local ())
-    exec_file_target = TARGET_SYSROOT_PREFIX + exec_file_target;
+  /* In case current_exec_file was changed, reopen_exec_file ensures
+     an up to date build_id (will do nothing if the file timestamp
+     did not change).  If exec file changed, reopen_exec_file has
+     allocated another file name, so get_exec_file again.  */
+  reopen_exec_file ();
+  current_exec_file = get_exec_file (0);
 
-  if (exec_file_target != current_exec_file)
+  const bfd_build_id *exec_file_build_id = build_id_bfd_get (exec_bfd);
+  if (exec_file_build_id != nullptr)
     {
+      /* Prepend the target prefix, to force gdb_bfd_open to open the
+	 file on the remote file system (if indeed remote).  */
+      std::string target_pid_exec_file
+	= std::string (TARGET_SYSROOT_PREFIX) + pid_exec_file;
+
+      gdb_bfd_ref_ptr abfd (gdb_bfd_open (target_pid_exec_file.c_str (),
+					  gnutarget, -1, false));
+      if (abfd != nullptr)
+	{
+	  const bfd_build_id *target_exec_file_build_id
+	    = build_id_bfd_get (abfd.get ());
+
+	  if (target_exec_file_build_id != nullptr)
+	    {
+	      if (exec_file_build_id->size == target_exec_file_build_id->size
+		  && memcmp (exec_file_build_id->data,
+			     target_exec_file_build_id->data,
+			     exec_file_build_id->size) == 0)
+		{
+		  /* Match.  */
+		  return;
+		}
+	      else
+		build_id_mismatch = true;
+	    }
+	}
+    }
+
+  if (build_id_mismatch)
+    {
+      std::string exec_file_target (pid_exec_file);
+
+      /* In case the exec file is not local, exec_file_target has to point at
+	 the target file system.  */
+      if (is_target_filename (current_exec_file) && !target_filesystem_is_local ())
+	exec_file_target = TARGET_SYSROOT_PREFIX + exec_file_target;
+
       warning
-	(_("Mismatch between current exec-file %ps\n"
+	(_("Build ID mismatch between current exec-file %ps\n"
 	   "and automatically determined exec-file %ps\n"
 	   "exec-file-mismatch handling is currently \"%s\""),
 	 styled_string (file_name_style.style (), current_exec_file),
@@ -273,7 +315,10 @@ validate_exec_file (int from_tty)
 	{
 	  symfile_add_flags add_flags = SYMFILE_MAINLINE;
 	  if (from_tty)
-	    add_flags |= SYMFILE_VERBOSE;
+	    {
+	      add_flags |= SYMFILE_VERBOSE;
+	      add_flags |= SYMFILE_ALWAYS_CONFIRM;
+	    }
 	  try
 	    {
 	      symbol_file_add_main (exec_file_target.c_str (), add_flags);
@@ -401,6 +446,7 @@ exec_file_attach (const char *filename, int from_tty)
 #if defined(__GO32__) || defined(_WIN32) || defined(__CYGWIN__)
 	  if (scratch_chan < 0)
 	    {
+	      int first_errno = errno;
 	      char *exename = (char *) alloca (strlen (filename) + 5);
 
 	      strcat (strcpy (exename, filename), ".exe");
@@ -409,6 +455,8 @@ exec_file_attach (const char *filename, int from_tty)
 				    O_RDWR | O_BINARY
 				    : O_RDONLY | O_BINARY,
 				    &scratch_storage);
+	      if (scratch_chan < 0)
+		errno = first_errno;
 	    }
 #endif
 	  if (scratch_chan < 0)
@@ -614,8 +662,7 @@ build_section_table (struct bfd *some_bfd, struct target_section **start,
   unsigned count;
 
   count = bfd_count_sections (some_bfd);
-  if (*start)
-    xfree (* start);
+  xfree (*start);
   *start = XNEWVEC (struct target_section, count);
   *end = *start;
   bfd_map_over_sections (some_bfd, add_to_section_table, (char *) end);
@@ -909,7 +956,8 @@ section_table_xfer_memory_partial (gdb_byte *readbuf, const gdb_byte *writebuf,
 				   ULONGEST *xfered_len,
 				   struct target_section *sections,
 				   struct target_section *sections_end,
-				   const char *section_name)
+				   gdb::function_view<bool
+				     (const struct target_section *)> match_cb)
 {
   int res;
   struct target_section *p;
@@ -923,7 +971,7 @@ section_table_xfer_memory_partial (gdb_byte *readbuf, const gdb_byte *writebuf,
       struct bfd_section *asect = p->the_bfd_section;
       bfd *abfd = asect->owner;
 
-      if (section_name && strcmp (section_name, asect->name) != 0)
+      if (match_cb != nullptr && !match_cb (p))
 	continue;		/* not the section we need.  */
       if (memaddr >= p->addr)
         {
@@ -996,8 +1044,7 @@ exec_target::xfer_partial (enum target_object object,
     return section_table_xfer_memory_partial (readbuf, writebuf,
 					      offset, len, xfered_len,
 					      table->sections,
-					      table->sections_end,
-					      NULL);
+					      table->sections_end);
   else
     return TARGET_XFER_E_IO;
 }
@@ -1139,7 +1186,8 @@ exec_set_section_address (const char *filename, int index, CORE_ADDR address)
   table = current_target_sections;
   for (p = table->sections; p < table->sections_end; p++)
     {
-      if (filename_cmp (filename, p->the_bfd_section->owner->filename) == 0
+      if (filename_cmp (filename,
+			bfd_get_filename (p->the_bfd_section->owner)) == 0
 	  && index == p->the_bfd_section->index)
 	{
 	  p->endaddr += address - p->addr;
@@ -1216,12 +1264,16 @@ Set exec-file-mismatch handling (ask|warn|off)."),
 			_("\
 Show exec-file-mismatch handling (ask|warn|off)."),
 			_("\
-Specifies how to handle a mismatch between the current exec-file name\n\
-loaded by GDB and the exec-file name automatically determined when attaching\n\
+Specifies how to handle a mismatch between the current exec-file\n\
+loaded by GDB and the exec-file automatically determined when attaching\n\
 to a process:\n\n\
  ask  - warn the user and ask whether to load the determined exec-file.\n\
  warn - warn the user, but do not change the exec-file.\n\
- off  - do not check for mismatch."),
+ off  - do not check for mismatch.\n\
+\n\
+GDB detects a mismatch by comparing the build IDs of the files.\n\
+If the user confirms loading the determined exec-file, then its symbols\n\
+will be loaded as well."),
 			set_exec_file_mismatch_command,
 			show_exec_file_mismatch_command,
 			&setlist, &showlist);

@@ -2274,7 +2274,7 @@ rs6000_builtin_type_vec64 (struct gdbarch *gdbarch)
 				   init_vector_type (bt->builtin_int8, 8));
 
       TYPE_VECTOR (t) = 1;
-      TYPE_NAME (t) = "ppc_builtin_type_vec64";
+      t->set_name ("ppc_builtin_type_vec64");
       tdep->ppc_builtin_type_vec64 = t;
     }
 
@@ -2321,7 +2321,7 @@ rs6000_builtin_type_vec128 (struct gdbarch *gdbarch)
 				   init_vector_type (bt->builtin_int8, 16));
 
       TYPE_VECTOR (t) = 1;
-      TYPE_NAME (t) = "ppc_builtin_type_vec128";
+      t->set_name ("ppc_builtin_type_vec128");
       tdep->ppc_builtin_type_vec128 = t;
     }
 
@@ -2531,7 +2531,7 @@ rs6000_convert_register_p (struct gdbarch *gdbarch, int regnum,
   return (tdep->ppc_fp0_regnum >= 0
 	  && regnum >= tdep->ppc_fp0_regnum
 	  && regnum < tdep->ppc_fp0_regnum + ppc_num_fprs
-	  && TYPE_CODE (type) == TYPE_CODE_FLT
+	  && type->code () == TYPE_CODE_FLT
 	  && TYPE_LENGTH (type)
 	     != TYPE_LENGTH (builtin_type (gdbarch)->builtin_double));
 }
@@ -2546,7 +2546,7 @@ rs6000_register_to_value (struct frame_info *frame,
   struct gdbarch *gdbarch = get_frame_arch (frame);
   gdb_byte from[PPC_MAX_REGISTER_SIZE];
   
-  gdb_assert (TYPE_CODE (type) == TYPE_CODE_FLT);
+  gdb_assert (type->code () == TYPE_CODE_FLT);
 
   if (!get_frame_register_bytes (frame, regnum, 0,
 				 register_size (gdbarch, regnum),
@@ -2568,7 +2568,7 @@ rs6000_value_to_register (struct frame_info *frame,
   struct gdbarch *gdbarch = get_frame_arch (frame);
   gdb_byte to[PPC_MAX_REGISTER_SIZE];
 
-  gdb_assert (TYPE_CODE (type) == TYPE_CODE_FLT);
+  gdb_assert (type->code () == TYPE_CODE_FLT);
 
   target_float_convert (from, type,
 			to, builtin_type (gdbarch)->builtin_double);
@@ -3315,7 +3315,7 @@ rs6000_adjust_frame_regnum (struct gdbarch *gdbarch, int num, int eh_frame_p)
 
 /* Information about a particular processor variant.  */
 
-struct variant
+struct ppc_variant
   {
     /* Name of this variant.  */
     const char *name;
@@ -3333,7 +3333,7 @@ struct variant
     struct target_desc **tdesc;
   };
 
-static struct variant variants[] =
+static struct ppc_variant variants[] =
 {
   {"powerpc", "PowerPC user-level", bfd_arch_powerpc,
    bfd_mach_ppc, &tdesc_powerpc_altivec32},
@@ -3392,10 +3392,10 @@ static struct variant variants[] =
 /* Return the variant corresponding to architecture ARCH and machine number
    MACH.  If no such variant exists, return null.  */
 
-static const struct variant *
+static const struct ppc_variant *
 find_variant_by_arch (enum bfd_architecture arch, unsigned long mach)
 {
-  const struct variant *v;
+  const struct ppc_variant *v;
 
   for (v = variants; v->name; v++)
     if (arch == v->arch && mach == v->mach)
@@ -6199,7 +6199,7 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
      layout, if we do not already have one.  */
   if (! tdesc_has_registers (tdesc))
     {
-      const struct variant *v;
+      const struct ppc_variant *v;
 
       /* Choose variant.  */
       v = find_variant_by_arch (arch, mach);

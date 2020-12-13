@@ -1,3 +1,254 @@
+2020-10-07  Anton Kolesov  <anton.kolesov@synopsys.com>
+
+	* configure.srv: Support ARC architecture.
+	* Makefile.in: Add linux-arc-low.cc and arch/arc.o.
+	* linux-arc-low.cc: New file.
+
+2020-09-23  Hannes Domani  <ssbssa@yahoo.de>
+
+	* win32-low.cc: Remove local wow64_process variable.
+	* win32-low.h: Remove local wow64_process variable.
+
+2020-09-10  Kamil Rytarowski  <n54@gmx.com>
+
+	* netbsd-low.cc: Add.
+	* netbsd-low.h: Likewise.
+	* netbsd-amd64-low.cc: Likewise.
+	* Makefile.in (SFILES): Register "netbsd-low.cc", "netbsd-low.h",
+	"netbsd-amd64-low.cc".
+	* configure.srv: Add x86_64-*-netbsd*.
+
+2020-08-13  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* server.cc (captured_main): Accept multiple `--selftest=`
+	options.  Pass all `--selftest=` arguments to run_tests.
+
+2020-07-30  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* configure, config.in: Regenerate.
+
+2020-07-26  Eli Zaretskii  <eliz@gnu.org>
+
+	* configure.ac (AC_CHECK_HEADERS): Add ws2tcpip.h.
+	When checking whether socklen_t type is defined, use ws2tcpip.h if
+	it is available and sys/socket.h isn't.
+	* configure: Regenerate.
+	* config.in: Regenerate.
+
+2020-07-22  Pedro Alves  <pedro@palves.net>
+
+	* inferiors.cc (switch_to_process): New, moved here from
+	thread-db.cc, and made extern.
+	* inferiors.h (switch_to_process): Declare.
+	* server.cc: Include "gdbsupport/scoped_restore.h".
+	(handle_qxfer_threads_proper): Now returns bool.  Prepare to
+	access memory around target calls.
+	(handle_qxfer_threads): Handle errors.
+	* thread-db.cc (switch_to_process): Moved to inferiors.cc.
+
+2020-07-21  Simon Marchi  <simon.marchi@efficios.com>
+
+	* linux-low.cc (stopped_pids): Make static.
+
+2020-07-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* tdesc.cc (allocate_target_description): Add header comment.
+	(target_desc_deleter::operator()): New function.
+	* tdesc.h (struct target_desc): Declare as final.
+
+2020-07-13  Simon Marchi  <simon.marchi@polymtl.ca>
+
+	* server.cc (handle_query): Use std::vector of
+	std::string for `qsupported` vector.  Use separate
+	vector for unknowns.
+	* target.h (class process_stratum_target) <process_qsupported>:
+	Change parameters to array_view of const char *.
+	(target_process_qsupported): Remove `count` parameter.
+	* target.cc (process_stratum_target::process_qsupported): Change
+	parameters to array_view of const char *.
+	* linux-x86-low.cc (class x86_target) <process_qsupported>:
+	Likewise.
+
+2020-06-29  Tom de Vries  <tdevries@suse.de>
+
+	* ax.h: Include gdbsupport/debug_agent.h.
+
+2020-06-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* tdesc.cc (struct tdesc_compatible_info): New struct.
+	(tdesc_compatible_info_list): New function.
+	(tdesc_compatible_info_arch_name): New function.
+
+2020-06-22  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	Use std::list to stop pending signal instead of manually-created
+	linked list.
+	* linux-low.h: Include <list>.
+	(struct pending_signal): Move here from linux-low.cc.
+	(struct lwp_info) <pending_signals>
+	<pending_signals_to_report>: Update the type.
+	* linux-low.cc (struct pending_signals): Remove.
+	(linux_process_target::delete_lwp)
+	(linux_process_target::add_lwp)
+	(enqueue_one_deferred_signal)
+	(dequeue_one_deferred_signal)
+	(enqueue_pending_signal)
+	(linux_process_target::resume_one_lwp_throw)
+	(linux_process_target::thread_needs_step_over)
+	(linux_process_target::resume_one_thread)
+	(linux_process_target::proceed_one_lwp): Update the use of pending
+	signal list.
+
+2020-06-17  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.in (%-generated.cc: ../gdb/regformats/arm/%.dat):
+	Remove.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.in (SFILES): Remove win32-arm-low.cc, wincecompat.cc.
+	* configure.srv: Remove mingw32ce cases.
+	* server.h, win32-low.cc: Remove __MINGW32CE__-guarded code.
+	* win32-low.h (to_back_slashes): Remove.
+	* win32-arm-low.cc, wincecompat.cc, wincecompat.h: Remove.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.in (SFILES): linux-tile-low.cc.
+	* configure.srv: Remove tilegx case.
+	* linux-tile-low.cc: Remove.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.in (SFILES): Remove linux-m32r-low.cc.
+	* configure.srv: Remove m32r case.
+	* linux-m32r-low.cc: Remove.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.in (SFILES): Remove linux-cris-low.c.
+	* configure.srv: Remove cris cases.
+	* linux-cris-low.cc, linux-crisv32-low.cc: Remove.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* Makefile.in (SFILES): Remove linux-bfin-low.c.
+	* configure.srv: Remove bfin case.
+	* linux-bfin-low.cc: Remove.
+	* linux-low.cc: Remove BFIN-conditional code.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* configure: Re-generate.
+	* configure.ac: Remove srv_qnx test.
+	* configure.srv: Remove nto case.
+	* nto-low.cc, nto-low.h, nto-x86-low.cc: Remove.
+	* remote-utils.c: Remove __QNX__-guarded code.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* configure: Re-generate.
+	* configure.ac: Remove srv_lynxos test.
+	* configure.srv: Remove lynxos cases.
+	* lynx-i386-low.cc, lynx-low.cc, lynx-low.h, lynx-ppc-low.c:
+	Remove.
+
+2020-06-12  Simon Marchi  <simon.marchi@efficios.com>
+
+	* README: Fix a few outdated or incoherent things.
+
+2020-05-27  Hannes Domani  <ssbssa@yahoo.de>
+
+	* win32-low.cc (do_initial_child_stuff): Set open_process_used.
+	(win32_clear_inferiors): Use open_process_used.
+	(get_child_debug_event): Likewise.
+
+2020-05-25  Michael Weghorn  <m.weghorn@posteo.de>
+
+	PR gdbserver/25893
+	* linux-low.cc (linux_process_target::create_inferior),
+	lynx-low.cc (lynx_process_target::create_inferior),
+	win32-low.cc (win32_process_target::create_inferior): Use
+	construct_inferior_arguments instead of stringify_argv
+	to get string representation which properly escapes
+	special characters.
+	* server.cc (handle_v_run): Just pass empty program arg
+	as such, since any further processing is now handled via
+	construct_inferior_arguments.
+
+2020-05-25  Michael Weghorn  <m.weghorn@posteo.de>
+
+	* nto-low.cc (nto_process_target::create_inferior): Pass
+	argv to spawnp function as char **.
+
+2020-05-25  Michael Weghorn  <m.weghorn@posteo.de>
+
+	* server.cc (captured_main), (handle_v_run): No longer
+	insert extra NULL element to args vector.
+
+2020-05-23  Pedro Alves  <palves@redhat.com>
+
+	* gdb-safe-ctype.h: New.
+
+2020-05-16  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
+
+	* linux-ia64-low.cc (ia64_target::sw_breakpoint_from_kind):
+	Fix incorrect 'gdb_assert_no_reached' to 'gdb_assert_not_reached'.
+	(ia64_target::low_breakpoint_at): Ditto.
+
+2020-05-15  Hannes Domani  <ssbssa@yahoo.de>
+
+	* win32-i386-low.cc (i386_supports_z_point_type): Handle
+	Z_PACKET_HW_BP z_type.
+	(i386_insert_point): Handle raw_bkpt_type type.
+	(i386_remove_point): Likewise.
+
+2020-04-30  Hannes Domani  <ssbssa@yahoo.de>
+
+	* configure.srv <x86_64-*-mingw*, x86_64-*-cygwin*> (srv_tgtobj):
+	Add arch/i386.o.
+	* win32-arm-low.cc (arm_num_regs): New function.
+	(struct win32_target_ops): Use arm_num_regs.
+	* win32-i386-low.cc (win32_get_current_dr): Adapt for WOW64
+	processes.
+	(i386_get_thread_context): Likewise.
+	(i386_prepare_to_resume): Likewise.
+	(i386_thread_added): Likewise.
+	(i386_single_step): Likewise.
+	(i386_fetch_inferior_register): Likewise.
+	(i386_store_inferior_register): Likewise.
+	(i386_arch_setup): Likewise.
+	(i386_win32_num_regs): New function.
+	(struct win32_target_ops): Use i386_win32_num_regs.
+	* win32-low.cc (win32_get_thread_context): Adapt for WOW64
+	processes.
+	(win32_require_context): Likewise.
+	(child_add_thread): Likewise.
+	(do_initial_child_stuff): Likewise.
+	(continue_one_thread): Likewise.
+	(win32_process_target::resume): Likewise.
+	(load_psapi): Likewise.
+	(win32_add_all_dlls): Likewise.
+	(maybe_adjust_pc): Likewise.
+	(win32_process_target::qxfer_siginfo): Likewise.
+	(initialize_low): Likewise.
+	* win32-low.h (struct win32_target_ops): Change num_regs to
+	callback function.
+
+2020-04-27  Simon Marchi  <simon.marchi@efficios.com>
+
+	* configure.ac: Remove check for fs_base/gs_base in
+	user_regs_struct.
+	* configure: Re-generate.
+	* config.in: Re-generate.
+	* linux-x86-low.cc (x86_64_regmap, x86_fill_gregset,
+	x86_store_gregset): Adjust.
+
+2020-04-22  Hannes Domani  <ssbssa@yahoo.de>
+
+	* server.cc (handle_search_memory_1): Fix gdb_read_memory return value
+	comparison.
+
 2020-04-16  Tom Tromey  <tromey@adacore.com>
 
 	* win32-low.cc (windows_nat::handle_access_violation): New

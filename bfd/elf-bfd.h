@@ -156,8 +156,12 @@ struct elf_link_hash_entry
   /* Same, but tracks a procedure linkage table entry.  */
   union gotplt_union plt;
 
-  /* Symbol size.  */
+  /* Symbol size.  NB: All fields starting from here are cleared by
+    _bfd_elf_link_hash_newfunc.  */
   bfd_size_type size;
+
+  /* Track dynamic relocs copied for this symbol.  */
+  struct elf_dyn_relocs *dyn_relocs;
 
   /* Symbol type (STT_NOTYPE, STT_OBJECT, etc.).  */
   unsigned int type : 8;
@@ -536,6 +540,25 @@ struct bfd_link_needed_list
   const char *name;
 };
 
+enum elf_target_os
+{
+  is_normal,
+  is_symbian,	/* Symbian OS.  */
+  is_solaris,	/* Solaris.  */
+  is_vxworks,	/* VxWorks.  */
+  is_nacl	/* Native Client.  */
+};
+
+/* Used by bfd_sym_from_r_symndx to cache a small number of local
+   symbols.  */
+#define LOCAL_SYM_CACHE_SIZE 32
+struct sym_cache
+{
+  bfd *abfd;
+  unsigned long indx[LOCAL_SYM_CACHE_SIZE];
+  Elf_Internal_Sym sym[LOCAL_SYM_CACHE_SIZE];
+};
+
 /* ELF linker hash table.  */
 
 struct elf_link_hash_table
@@ -556,6 +579,15 @@ struct elf_link_hash_table
   /* True if this target has relocatable executables, so needs dynamic
      section symbols.  */
   bfd_boolean is_relocatable_executable;
+
+  /* TRUE if there are IFUNC resolvers.  */
+  bfd_boolean ifunc_resolvers;
+
+  /* TRUE if DT_PLTGOT is a required dynamic tag.  */
+  bfd_boolean dt_pltgot_required;
+
+  /* TRUE if DT_JMPREL is a required dynamic tag.  */
+  bfd_boolean dt_jmprel_required;
 
   /* The BFD used to hold special sections created by the linker.
      This will be the first BFD found which requires these sections to
@@ -637,8 +669,25 @@ struct elf_link_hash_table
   asection *tls_sec;
   bfd_size_type tls_size;  /* Bytes.  */
 
+  /* The offset into splt of the PLT entry for the TLS descriptor
+     resolver.  Special values are 0, if not necessary (or not found
+     to be necessary yet), and -1 if needed but not determined
+     yet.  */
+  bfd_vma tlsdesc_plt;
+
+  /* The GOT offset for the lazy trampoline.  Communicated to the
+     loader via DT_TLSDESC_GOT.  The magic value (bfd_vma) -1
+     indicates an offset is not allocated.  */
+  bfd_vma tlsdesc_got;
+
+  /* Target OS for linker output.  */
+  enum elf_target_os target_os;
+
   /* A linked list of dynamic BFD's loaded in the link.  */
   struct elf_link_loaded_list *dyn_loaded;
+
+  /* Small local sym cache.  */
+  struct sym_cache sym_cache;
 
   /* Short-cuts to get to dynamic linker sections.  */
   asection *sgot;
@@ -681,16 +730,6 @@ struct elf_link_hash_table
 /* Returns TRUE if the hash table is a struct elf_link_hash_table.  */
 #define is_elf_hash_table(htab)						\
   (((struct bfd_link_hash_table *) (htab))->type == bfd_link_elf_hash_table)
-
-/* Used by bfd_sym_from_r_symndx to cache a small number of local
-   symbols.  */
-#define LOCAL_SYM_CACHE_SIZE 32
-struct sym_cache
-{
-  bfd *abfd;
-  unsigned long indx[LOCAL_SYM_CACHE_SIZE];
-  Elf_Internal_Sym sym[LOCAL_SYM_CACHE_SIZE];
-};
 
 /* Constant information held for an ELF backend.  */
 
@@ -856,6 +895,9 @@ struct elf_backend_data
   /* An identifier used to distinguish different target specific
      extensions to elf_obj_tdata and elf_link_hash_table structures.  */
   enum elf_target_id target_id;
+
+  /* Target OS.  */
+  enum elf_target_os target_os;
 
   /* The ELF machine code (EM_xxxx) for this backend.  */
   int elf_machine_code;
@@ -1082,6 +1124,12 @@ struct elf_backend_data
      CREATE_DYNAMIC_SECTIONS entry point.  */
   bfd_boolean (*elf_backend_size_dynamic_sections)
     (bfd *output_bfd, struct bfd_link_info *info);
+
+  /* The STRIP_ZERO_SIZED_DYNAMIC_SECTIONS function is called by the
+     ELF backend linker to strip zero-sized dynamic sections after
+     the section sizes have been set.  */
+  bfd_boolean (*elf_backend_strip_zero_sized_dynamic_sections)
+    (struct bfd_link_info *info);
 
   /* Set TEXT_INDEX_SECTION and DATA_INDEX_SECTION, the output sections
      we keep to use as a base for relocs and symbols.  */
@@ -1356,6 +1404,14 @@ struct elf_backend_data
      Returns TRUE if it did so and FALSE if the caller should.  */
   bfd_boolean (*elf_backend_write_section)
     (bfd *, struct bfd_link_info *, asection *, bfd_byte *);
+
+  /* This function, if defined, returns TRUE if it is section symbols
+     only that are considered local for the purpose of partitioning the
+     symbol table into local and global symbols.  This should be NULL
+     for most targets, in which case the correct thing will be done.
+     MIPS ELF, at least on the Irix 5, has special requirements.  */
+  bfd_boolean (*elf_backend_elfsym_local_is_section)
+    (bfd *);
 
   /* The level of IRIX compatibility we're striving for.
      MIPS ELF specific function.  */
@@ -1699,6 +1755,11 @@ struct bfd_elf_section_data
 
   /* Link from a text section to its .eh_frame_entry section.  */
   asection *eh_frame_entry;
+
+  /* TRUE if the section has secondary reloc sections associated with it.
+     FIXME: In the future it might be better to change this into a list
+     of secondary reloc sections, making lookup easier and faster.  */
+  bfd_boolean has_secondary_relocs;
 
   /* A pointer used for various section optimizations.  */
   void *sec_info;
@@ -2520,6 +2581,8 @@ extern bfd_boolean bfd_elf_link_add_symbols
   (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_elf_add_dynamic_entry
   (struct bfd_link_info *, bfd_vma, bfd_vma);
+extern bfd_boolean _bfd_elf_strip_zero_sized_dynamic_sections
+  (struct bfd_link_info *);
 extern int bfd_elf_add_dt_needed_tag
   (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_elf_link_check_relocs
@@ -2730,6 +2793,8 @@ extern char *elfcore_write_aarch_sve
   (bfd *, char *, int *, const void *, int);
 extern char *elfcore_write_aarch_pauth
   (bfd *, char *, int *, const void *, int);
+extern char *elfcore_write_arc_v2
+  (bfd *, char *, int *, const void *, int);
 extern char *elfcore_write_lwpstatus
   (bfd *, char *, int *, long, int, const void *);
 extern char *elfcore_write_register_note
@@ -2835,8 +2900,8 @@ extern bfd_boolean _bfd_elf_create_ifunc_sections
   (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_elf_allocate_ifunc_dyn_relocs
   (struct bfd_link_info *, struct elf_link_hash_entry *,
-   struct elf_dyn_relocs **, bfd_boolean *, unsigned int,
-   unsigned int, unsigned int, bfd_boolean);
+   struct elf_dyn_relocs **, unsigned int, unsigned int,
+   unsigned int, bfd_boolean);
 
 extern void elf_append_rela (bfd *, asection *, Elf_Internal_Rela *);
 extern void elf_append_rel (bfd *, asection *, Elf_Internal_Rela *);
@@ -2860,6 +2925,13 @@ extern bfd_boolean _bfd_elf_write_secondary_reloc_section
 extern unsigned int _bfd_elf_symbol_section_index
   (bfd *, elf_symbol_type *);
 
+extern asection *_bfd_elf_readonly_dynrelocs
+  (struct elf_link_hash_entry *);
+extern bfd_boolean _bfd_elf_maybe_set_textrel
+  (struct elf_link_hash_entry *, void *);
+
+extern bfd_boolean _bfd_elf_add_dynamic_tags
+  (bfd *, struct bfd_link_info *, bfd_boolean);
 
 /* Large common section.  */
 extern asection _bfd_elf_large_com_section;

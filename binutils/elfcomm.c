@@ -727,7 +727,10 @@ setup_nested_archive (struct archive_info *nested_arch,
 
   /* Close previous file and discard cached information.  */
   if (nested_arch->file != NULL)
-    fclose (nested_arch->file);
+    {
+      fclose (nested_arch->file);
+      nested_arch->file = NULL;
+    }
   release_archive (nested_arch);
 
   member_file = fopen (member_file_name, "rb");
@@ -744,14 +747,14 @@ setup_nested_archive (struct archive_info *nested_arch,
 void
 release_archive (struct archive_info * arch)
 {
-  if (arch->file_name != NULL)
-    free (arch->file_name);
-  if (arch->index_array != NULL)
-    free (arch->index_array);
-  if (arch->sym_table != NULL)
-    free (arch->sym_table);
-  if (arch->longnames != NULL)
-    free (arch->longnames);
+  free (arch->file_name);
+  free (arch->index_array);
+  free (arch->sym_table);
+  free (arch->longnames);
+  arch->file_name = NULL;
+  arch->index_array = NULL;
+  arch->sym_table = NULL;
+  arch->longnames = NULL;
 }
 
 /* Get the name of an archive member from the current archive header.

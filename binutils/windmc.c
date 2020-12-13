@@ -821,7 +821,7 @@ write_dbg (FILE *fp)
   while (h != NULL)
     {
       if (h->symbol)
-	write_dbg_define (fp, h->symbol, mcset_msg_id_typedef);
+	write_dbg_define (fp, h->symbol, h->id_typecast);
       h = h->next;
     }
   fprintf (fp, "  { (");
@@ -908,7 +908,7 @@ write_header (FILE *fp)
 	    fprintf (fp, "%s", s);
 	}
       if (h->symbol)
-	write_header_define (fp, h->symbol, h->vid, mcset_msg_id_typedef, h->sub);
+	write_header_define (fp, h->symbol, h->vid, h->id_typecast, h->sub);
       h = h->next;
     }
 }
@@ -1161,12 +1161,9 @@ main (int argc, char **argv)
     }
   write_bin ();
 
-  if (mc_nodes_lang)
-    free (mc_nodes_lang);
-  if (mc_severity_codes)
-    free (mc_severity_codes);
-  if (mc_facility_codes)
-    free (mc_facility_codes);
+  free (mc_nodes_lang);
+  free (mc_severity_codes);
+  free (mc_facility_codes);
 
   xexit (0);
   return 0;

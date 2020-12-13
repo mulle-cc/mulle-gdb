@@ -1,4 +1,5 @@
 .*Assembler messages:
+#...
 .*Warning: Invalid CSR `cycleh' for the current ISA
 .*Warning: Invalid CSR `timeh' for the current ISA
 .*Warning: Invalid CSR `instreth' for the current ISA
@@ -64,3 +65,4 @@
 .*Warning: Invalid CSR `mhpmcounter29h' for the current ISA
 .*Warning: Invalid CSR `mhpmcounter30h' for the current ISA
 .*Warning: Invalid CSR `mhpmcounter31h' for the current ISA
+#...

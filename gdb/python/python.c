@@ -238,6 +238,30 @@ gdbpy_enter::~gdbpy_enter ()
   PyGILState_Release (m_state);
 }
 
+/* A helper class to save and restore the GIL, but without touching
+   the other globals that are handled by gdbpy_enter.  */
+
+class gdbpy_gil
+{
+public:
+
+  gdbpy_gil ()
+    : m_state (PyGILState_Ensure ())
+  {
+  }
+
+  ~gdbpy_gil ()
+  {
+    PyGILState_Release (m_state);
+  }
+
+  DISABLE_COPY_AND_ASSIGN (gdbpy_gil);
+
+private:
+
+  PyGILState_STATE m_state;
+};
+
 /* Set the quit flag.  */
 
 static void
@@ -251,6 +275,10 @@ gdbpy_set_quit_flag (const struct extension_language_defn *extlang)
 static int
 gdbpy_check_quit_flag (const struct extension_language_defn *extlang)
 {
+  if (!gdb_python_initialized)
+    return 0;
+
+  gdbpy_gil gil;
   return PyOS_InterruptOccurred ();
 }
 
@@ -943,30 +971,6 @@ gdbpy_source_script (const struct extension_language_defn *extlang,
 
 /* Posting and handling events.  */
 
-/* A helper class to save and restore the GIL, but without touching
-   the other globals that are handled by gdbpy_enter.  */
-
-class gdbpy_gil
-{
-public:
-
-  gdbpy_gil ()
-    : m_state (PyGILState_Ensure ())
-  {
-  }
-
-  ~gdbpy_gil ()
-  {
-    PyGILState_Release (m_state);
-  }
-
-  DISABLE_COPY_AND_ASSIGN (gdbpy_gil);
-
-private:
-
-  PyGILState_STATE m_state;
-};
-
 /* A single event.  */
 struct gdbpy_event
 {
@@ -975,7 +979,7 @@ struct gdbpy_event
   {
   }
 
-  gdbpy_event (gdbpy_event &&other)
+  gdbpy_event (gdbpy_event &&other) noexcept
     : m_func (other.m_func)
   {
     other.m_func = nullptr;
@@ -1350,19 +1354,17 @@ gdbpy_print_stack_or_quit ()
 static PyObject *
 gdbpy_progspaces (PyObject *unused1, PyObject *unused2)
 {
-  struct program_space *ps;
-
   gdbpy_ref<> list (PyList_New (0));
   if (list == NULL)
     return NULL;
 
-  ALL_PSPACES (ps)
-  {
-    gdbpy_ref<> item = pspace_to_pspace_object (ps);
+  for (struct program_space *ps : program_spaces)
+    {
+      gdbpy_ref<> item = pspace_to_pspace_object (ps);
 
-    if (item == NULL || PyList_Append (list.get (), item.get ()) == -1)
-      return NULL;
-  }
+      if (item == NULL || PyList_Append (list.get (), item.get ()) == -1)
+	return NULL;
+    }
 
   return list.release ();
 }
@@ -1618,6 +1620,7 @@ finalize_python (void *ignore)
 
   Py_Finalize ();
 
+  gdb_python_initialized = false;
   restore_active_ext_lang (previous_active);
 }
 
@@ -1756,6 +1759,7 @@ do_start_initialization ()
       || gdbpy_initialize_py_events () < 0
       || gdbpy_initialize_event () < 0
       || gdbpy_initialize_arch () < 0
+      || gdbpy_initialize_registers () < 0
       || gdbpy_initialize_xmethods () < 0
       || gdbpy_initialize_unwind () < 0
       || gdbpy_initialize_tui () < 0)
@@ -1787,8 +1791,7 @@ do_start_initialization ()
     return false;
 
   /* Release the GIL while gdb runs.  */
-  PyThreadState_Swap (NULL);
-  PyEval_ReleaseLock ();
+  PyEval_SaveThread ();
 
   make_final_cleanup (finalize_python, NULL);
 

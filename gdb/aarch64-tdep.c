@@ -287,6 +287,12 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 {
   enum bfd_endian byte_order_for_code = gdbarch_byte_order_for_code (gdbarch);
   int i;
+
+  /* Whether the stack has been set.  This should be true when we notice a SP
+     to FP move or if we are using the SP as the base register for storing
+     data, in case the FP is ommitted.  */
+  bool seen_stack_set = false;
+
   /* Track X registers and D registers in prologue.  */
   pv_t regs[AARCH64_X_REGISTER_COUNT + AARCH64_D_REGISTER_COUNT];
 
@@ -326,6 +332,10 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	      regs[rd] = pv_add_constant (regs[rn],
 					  -inst.operands[2].imm.value);
 	    }
+
+	  /* Did we move SP to FP?  */
+	  if (rn == AARCH64_SP_REGNUM && rd == AARCH64_FP_REGNUM)
+	    seen_stack_set = true;
 	}
       else if (inst.opcode->iclass == pcreladdr
 	       && inst.operands[1].type == AARCH64_OPND_ADDR_ADRP)
@@ -358,6 +368,12 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
       else if (inst.opcode->op == OP_MOVZ)
 	{
 	  gdb_assert (inst.operands[0].type == AARCH64_OPND_Rd);
+
+	  /* If this shows up before we set the stack, keep going.  Otherwise
+	     stop the analysis.  */
+	  if (seen_stack_set)
+	    break;
+
 	  regs[inst.operands[0].reg.regno] = pv_unknown ();
 	}
       else if (inst.opcode->iclass == log_shift
@@ -399,6 +415,10 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	  stack.store
 	    (pv_add_constant (regs[rn], inst.operands[1].addr.offset.imm),
 	     size, regs[rt]);
+
+	  /* Are we storing with SP as a base?  */
+	  if (rn == AARCH64_SP_REGNUM)
+	    seen_stack_set = true;
 	}
       else if ((inst.opcode->iclass == ldstpair_off
 		|| (inst.opcode->iclass == ldstpair_indexed
@@ -442,6 +462,10 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	  if (inst.operands[2].addr.writeback)
 	    regs[rn] = pv_add_constant (regs[rn], imm);
 
+	  /* Ignore the instruction that allocates stack space and sets
+	     the SP.  */
+	  if (rn == AARCH64_SP_REGNUM && !inst.operands[2].addr.writeback)
+	    seen_stack_set = true;
 	}
       else if ((inst.opcode->iclass == ldst_imm9 /* Signed immediate.  */
 		|| (inst.opcode->iclass == ldst_pos /* Unsigned immediate.  */
@@ -464,6 +488,10 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	  stack.store (pv_add_constant (regs[rn], imm), size, regs[rt]);
 	  if (inst.operands[1].addr.writeback)
 	    regs[rn] = pv_add_constant (regs[rn], imm);
+
+	  /* Are we storing with SP as a base?  */
+	  if (rn == AARCH64_SP_REGNUM)
+	    seen_stack_set = true;
 	}
       else if (inst.opcode->iclass == testbranch)
 	{
@@ -688,6 +716,117 @@ aarch64_analyze_prologue_test (void)
 	  SELF_CHECK (cache.saved_regs[i + regnum + AARCH64_D0_REGNUM].addr
 		      == -1);
       }
+  }
+
+  /* Test handling of movz before setting the frame pointer.  */
+  {
+    static const uint32_t insns[] = {
+      0xa9bf7bfd, /* stp     x29, x30, [sp, #-16]! */
+      0x52800020, /* mov     w0, #0x1 */
+      0x910003fd, /* mov     x29, sp */
+      0x528000a2, /* mov     w2, #0x5 */
+      0x97fffff8, /* bl      6e4 */
+    };
+
+    instruction_reader_test reader (insns);
+
+    trad_frame_reset_saved_regs (gdbarch, cache.saved_regs);
+    CORE_ADDR end = aarch64_analyze_prologue (gdbarch, 0, 128, &cache, reader);
+
+    /* We should stop at the 4th instruction.  */
+    SELF_CHECK (end == (4 - 1) * 4);
+    SELF_CHECK (cache.framereg == AARCH64_FP_REGNUM);
+    SELF_CHECK (cache.framesize == 16);
+  }
+
+  /* Test handling of movz/stp when using the stack pointer as frame
+     pointer.  */
+  {
+    static const uint32_t insns[] = {
+      0xa9bc7bfd, /* stp     x29, x30, [sp, #-64]! */
+      0x52800020, /* mov     w0, #0x1 */
+      0x290207e0, /* stp     w0, w1, [sp, #16] */
+      0xa9018fe2, /* stp     x2, x3, [sp, #24] */
+      0x528000a2, /* mov     w2, #0x5 */
+      0x97fffff8, /* bl      6e4 */
+    };
+
+    instruction_reader_test reader (insns);
+
+    trad_frame_reset_saved_regs (gdbarch, cache.saved_regs);
+    CORE_ADDR end = aarch64_analyze_prologue (gdbarch, 0, 128, &cache, reader);
+
+    /* We should stop at the 5th instruction.  */
+    SELF_CHECK (end == (5 - 1) * 4);
+    SELF_CHECK (cache.framereg == AARCH64_SP_REGNUM);
+    SELF_CHECK (cache.framesize == 64);
+  }
+
+  /* Test handling of movz/str when using the stack pointer as frame
+     pointer  */
+  {
+    static const uint32_t insns[] = {
+      0xa9bc7bfd, /* stp     x29, x30, [sp, #-64]! */
+      0x52800020, /* mov     w0, #0x1 */
+      0xb9002be4, /* str     w4, [sp, #40] */
+      0xf9001be5, /* str     x5, [sp, #48] */
+      0x528000a2, /* mov     w2, #0x5 */
+      0x97fffff8, /* bl      6e4 */
+    };
+
+    instruction_reader_test reader (insns);
+
+    trad_frame_reset_saved_regs (gdbarch, cache.saved_regs);
+    CORE_ADDR end = aarch64_analyze_prologue (gdbarch, 0, 128, &cache, reader);
+
+    /* We should stop at the 5th instruction.  */
+    SELF_CHECK (end == (5 - 1) * 4);
+    SELF_CHECK (cache.framereg == AARCH64_SP_REGNUM);
+    SELF_CHECK (cache.framesize == 64);
+  }
+
+  /* Test handling of movz/stur when using the stack pointer as frame
+     pointer.  */
+  {
+    static const uint32_t insns[] = {
+      0xa9bc7bfd, /* stp     x29, x30, [sp, #-64]! */
+      0x52800020, /* mov     w0, #0x1 */
+      0xb80343e6, /* stur    w6, [sp, #52] */
+      0xf80383e7, /* stur    x7, [sp, #56] */
+      0x528000a2, /* mov     w2, #0x5 */
+      0x97fffff8, /* bl      6e4 */
+    };
+
+    instruction_reader_test reader (insns);
+
+    trad_frame_reset_saved_regs (gdbarch, cache.saved_regs);
+    CORE_ADDR end = aarch64_analyze_prologue (gdbarch, 0, 128, &cache, reader);
+
+    /* We should stop at the 5th instruction.  */
+    SELF_CHECK (end == (5 - 1) * 4);
+    SELF_CHECK (cache.framereg == AARCH64_SP_REGNUM);
+    SELF_CHECK (cache.framesize == 64);
+  }
+
+  /* Test handling of movz when there is no frame pointer set or no stack
+     pointer used.  */
+  {
+    static const uint32_t insns[] = {
+      0xa9bf7bfd, /* stp     x29, x30, [sp, #-16]! */
+      0x52800020, /* mov     w0, #0x1 */
+      0x528000a2, /* mov     w2, #0x5 */
+      0x97fffff8, /* bl      6e4 */
+    };
+
+    instruction_reader_test reader (insns);
+
+    trad_frame_reset_saved_regs (gdbarch, cache.saved_regs);
+    CORE_ADDR end = aarch64_analyze_prologue (gdbarch, 0, 128, &cache, reader);
+
+    /* We should stop at the 4th instruction.  */
+    SELF_CHECK (end == (4 - 1) * 4);
+    SELF_CHECK (cache.framereg == AARCH64_SP_REGNUM);
+    SELF_CHECK (cache.framesize == 16);
   }
 
   /* Test a prologue in which there is a return address signing instruction.  */
@@ -1254,7 +1393,7 @@ static ULONGEST
 aarch64_type_align (gdbarch *gdbarch, struct type *t)
 {
   t = check_typedef (t);
-  if (TYPE_CODE (t) == TYPE_CODE_ARRAY && TYPE_VECTOR (t))
+  if (t->code () == TYPE_CODE_ARRAY && TYPE_VECTOR (t))
     {
       /* Use the natural alignment for vector types (the same for
 	 scalar type), but the maximum alignment is 128-bit.  */
@@ -1283,7 +1422,7 @@ aapcs_is_vfp_call_or_return_candidate_1 (struct type *type,
   if (type == nullptr)
     return -1;
 
-  switch (TYPE_CODE (type))
+  switch (type->code ())
     {
     case TYPE_CODE_FLT:
       if (TYPE_LENGTH (type) > 16)
@@ -1292,7 +1431,7 @@ aapcs_is_vfp_call_or_return_candidate_1 (struct type *type,
       if (*fundamental_type == nullptr)
 	*fundamental_type = type;
       else if (TYPE_LENGTH (type) != TYPE_LENGTH (*fundamental_type)
-	       || TYPE_CODE (type) != TYPE_CODE (*fundamental_type))
+	       || type->code () != (*fundamental_type)->code ())
 	return -1;
 
       return 1;
@@ -1306,7 +1445,7 @@ aapcs_is_vfp_call_or_return_candidate_1 (struct type *type,
 	if (*fundamental_type == nullptr)
 	  *fundamental_type = target_type;
 	else if (TYPE_LENGTH (target_type) != TYPE_LENGTH (*fundamental_type)
-		 || TYPE_CODE (target_type) != TYPE_CODE (*fundamental_type))
+		 || target_type->code () != (*fundamental_type)->code ())
 	  return -1;
 
 	return 2;
@@ -1322,7 +1461,7 @@ aapcs_is_vfp_call_or_return_candidate_1 (struct type *type,
 	    if (*fundamental_type == nullptr)
 	      *fundamental_type = type;
 	    else if (TYPE_LENGTH (type) != TYPE_LENGTH (*fundamental_type)
-		     || TYPE_CODE (type) != TYPE_CODE (*fundamental_type))
+		     || type->code () != (*fundamental_type)->code ())
 	      return -1;
 
 	    return 1;
@@ -1346,13 +1485,13 @@ aapcs_is_vfp_call_or_return_candidate_1 (struct type *type,
       {
 	int count = 0;
 
-	for (int i = 0; i < TYPE_NFIELDS (type); i++)
+	for (int i = 0; i < type->num_fields (); i++)
 	  {
 	    /* Ignore any static fields.  */
-	    if (field_is_static (&TYPE_FIELD (type, i)))
+	    if (field_is_static (&type->field (i)))
 	      continue;
 
-	    struct type *member = check_typedef (TYPE_FIELD_TYPE (type, i));
+	    struct type *member = check_typedef (type->field (i).type ());
 
 	    int sub_count = aapcs_is_vfp_call_or_return_candidate_1
 			      (member, fundamental_type);
@@ -1449,7 +1588,7 @@ pass_in_x (struct gdbarch *gdbarch, struct regcache *regcache,
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   int len = TYPE_LENGTH (type);
-  enum type_code typecode = TYPE_CODE (type);
+  enum type_code typecode = type->code ();
   int regnum = AARCH64_X0_REGNUM + info->ngrn;
   const bfd_byte *buf = value_contents (arg);
 
@@ -1600,7 +1739,7 @@ pass_in_v_vfp_candidate (struct gdbarch *gdbarch, struct regcache *regcache,
 			 struct aarch64_call_info *info, struct type *arg_type,
 			 struct value *arg)
 {
-  switch (TYPE_CODE (arg_type))
+  switch (arg_type->code ())
     {
     case TYPE_CODE_FLT:
       return pass_in_v (gdbarch, regcache, info, TYPE_LENGTH (arg_type),
@@ -1628,10 +1767,10 @@ pass_in_v_vfp_candidate (struct gdbarch *gdbarch, struct regcache *regcache,
 
     case TYPE_CODE_STRUCT:
     case TYPE_CODE_UNION:
-      for (int i = 0; i < TYPE_NFIELDS (arg_type); i++)
+      for (int i = 0; i < arg_type->num_fields (); i++)
 	{
 	  /* Don't include static fields.  */
-	  if (field_is_static (&TYPE_FIELD (arg_type, i)))
+	  if (field_is_static (&arg_type->field (i)))
 	    continue;
 
 	  struct value *field = value_primitive_field (arg, 0, i, arg_type);
@@ -1736,7 +1875,7 @@ aarch64_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 	  continue;
 	}
 
-      switch (TYPE_CODE (arg_type))
+      switch (arg_type->code ())
 	{
 	case TYPE_CODE_INT:
 	case TYPE_CODE_BOOL:
@@ -2120,12 +2259,12 @@ aarch64_extract_return_value (struct type *type, struct regcache *regs,
 	  valbuf += len;
 	}
     }
-  else if (TYPE_CODE (type) == TYPE_CODE_INT
-	   || TYPE_CODE (type) == TYPE_CODE_CHAR
-	   || TYPE_CODE (type) == TYPE_CODE_BOOL
-	   || TYPE_CODE (type) == TYPE_CODE_PTR
+  else if (type->code () == TYPE_CODE_INT
+	   || type->code () == TYPE_CODE_CHAR
+	   || type->code () == TYPE_CODE_BOOL
+	   || type->code () == TYPE_CODE_PTR
 	   || TYPE_IS_REFERENCE (type)
-	   || TYPE_CODE (type) == TYPE_CODE_ENUM)
+	   || type->code () == TYPE_CODE_ENUM)
     {
       /* If the type is a plain integer, then the access is
 	 straight-forward.  Otherwise we have to play around a bit
@@ -2233,12 +2372,12 @@ aarch64_store_return_value (struct type *type, struct regcache *regs,
 	  valbuf += len;
 	}
     }
-  else if (TYPE_CODE (type) == TYPE_CODE_INT
-	   || TYPE_CODE (type) == TYPE_CODE_CHAR
-	   || TYPE_CODE (type) == TYPE_CODE_BOOL
-	   || TYPE_CODE (type) == TYPE_CODE_PTR
+  else if (type->code () == TYPE_CODE_INT
+	   || type->code () == TYPE_CODE_CHAR
+	   || type->code () == TYPE_CODE_BOOL
+	   || type->code () == TYPE_CODE_PTR
 	   || TYPE_IS_REFERENCE (type)
-	   || TYPE_CODE (type) == TYPE_CODE_ENUM)
+	   || type->code () == TYPE_CODE_ENUM)
     {
       if (TYPE_LENGTH (type) <= X_REGISTER_SIZE)
 	{
@@ -2294,9 +2433,9 @@ aarch64_return_value (struct gdbarch *gdbarch, struct value *func_value,
 		      gdb_byte *readbuf, const gdb_byte *writebuf)
 {
 
-  if (TYPE_CODE (valtype) == TYPE_CODE_STRUCT
-      || TYPE_CODE (valtype) == TYPE_CODE_UNION
-      || TYPE_CODE (valtype) == TYPE_CODE_ARRAY)
+  if (valtype->code () == TYPE_CODE_STRUCT
+      || valtype->code () == TYPE_CODE_UNION
+      || valtype->code () == TYPE_CODE_ARRAY)
     {
       if (aarch64_return_in_memory (gdbarch, valtype))
 	{

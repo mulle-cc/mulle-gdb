@@ -49,15 +49,14 @@ get_long_set_bounds (struct type *type, LONGEST *low, LONGEST *high)
 {
   int len, i;
 
-  if (TYPE_CODE (type) == TYPE_CODE_STRUCT)
+  if (type->code () == TYPE_CODE_STRUCT)
     {
-      len = TYPE_NFIELDS (type);
+      len = type->num_fields ();
       i = TYPE_N_BASECLASSES (type);
       if (len == 0)
 	return 0;
-      *low = TYPE_LOW_BOUND (TYPE_INDEX_TYPE (TYPE_FIELD_TYPE (type, i)));
-      *high = TYPE_HIGH_BOUND (TYPE_INDEX_TYPE (TYPE_FIELD_TYPE (type,
-								 len-1)));
+      *low = type->field (i).type ()->bounds ()->low.const_val ();
+      *high = type->field (len - 1).type ()->bounds ()->high.const_val ();
       return 1;
     }
   error (_("expecting long_set"));
@@ -83,11 +82,11 @@ m2_print_long_set (struct type *type, const gdb_byte *valaddr,
   type = check_typedef (type);
 
   fprintf_filtered (stream, "{");
-  len = TYPE_NFIELDS (type);
+  len = type->num_fields ();
   if (get_long_set_bounds (type, &low_bound, &high_bound))
     {
       field = TYPE_N_BASECLASSES (type);
-      range = TYPE_INDEX_TYPE (TYPE_FIELD_TYPE (type, field));
+      range = type->field (field).type ()->index_type ();
     }
   else
     {
@@ -102,7 +101,7 @@ m2_print_long_set (struct type *type, const gdb_byte *valaddr,
     {
       for (i = low_bound; i <= high_bound; i++)
 	{
-	  bitval = value_bit_index (TYPE_FIELD_TYPE (type, field),
+	  bitval = value_bit_index (type->field (field).type (),
 				    (TYPE_FIELD_BITPOS (type, field) / 8) +
 				    valaddr + embedded_offset, i);
 	  if (bitval < 0)
@@ -137,7 +136,7 @@ m2_print_long_set (struct type *type, const gdb_byte *valaddr,
 	      field++;
 	      if (field == len)
 		break;
-	      range = TYPE_INDEX_TYPE (TYPE_FIELD_TYPE (type, field));
+	      range = type->field (field).type ()->index_type ();
 	      if (get_discrete_bounds (range, &field_low, &field_high) < 0)
 		break;
 	      target = TYPE_TARGET_TYPE (range);
@@ -168,11 +167,11 @@ m2_print_unbounded_array (struct value *value,
   struct type *type = check_typedef (value_type (value));
   const gdb_byte *valaddr = value_contents_for_printing (value);
 
-  addr = unpack_pointer (TYPE_FIELD_TYPE (type, 0),
+  addr = unpack_pointer (type->field (0).type (),
 			 (TYPE_FIELD_BITPOS (type, 0) / 8) +
 			 valaddr);
 
-  val = value_at_lazy (TYPE_TARGET_TYPE (TYPE_FIELD_TYPE (type, 0)),
+  val = value_at_lazy (TYPE_TARGET_TYPE (type->field (0).type ()),
 		       addr);
   len = unpack_field_as_long (type, valaddr, 1);
 
@@ -191,7 +190,7 @@ print_unpacked_pointer (struct type *type,
   struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
   int want_space = 0;
 
-  if (TYPE_CODE (elttype) == TYPE_CODE_FUNC)
+  if (elttype->code () == TYPE_CODE_FUNC)
     {
       /* Try to print what function it points to.  */
       print_function_pointer_address (options, gdbarch, addr, stream);
@@ -209,7 +208,7 @@ print_unpacked_pointer (struct type *type,
      pointed to, unless pointer is null.  */
 
   if (TYPE_LENGTH (elttype) == 1
-      && TYPE_CODE (elttype) == TYPE_CODE_INT
+      && elttype->code () == TYPE_CODE_INT
       && (options->format == 0 || options->format == 's')
       && addr != 0)
     {
@@ -237,7 +236,7 @@ print_variable_at_address (struct type *type,
   fputs_filtered (paddress (gdbarch, addr), stream);
   fprintf_filtered (stream, "] : ");
   
-  if (TYPE_CODE (elttype) != TYPE_CODE_UNDEF)
+  if (elttype->code () != TYPE_CODE_UNDEF)
     {
       struct value *deref_val =
 	value_at (TYPE_TARGET_TYPE (type), unpack_pointer (type, valaddr));
@@ -265,13 +264,11 @@ m2_print_array_contents (struct value *val,
 
   if (TYPE_LENGTH (type) > 0)
     {
-      if (options->prettyformat_arrays)
-	print_spaces_filtered (2 + 2 * recurse, stream);
       /* For an array of chars, print with string syntax.  */
       if (TYPE_LENGTH (type) == 1 &&
-	  ((TYPE_CODE (type) == TYPE_CODE_INT)
+	  ((type->code () == TYPE_CODE_INT)
 	   || ((current_language->la_language == language_m2)
-	       && (TYPE_CODE (type) == TYPE_CODE_CHAR)))
+	       && (type->code () == TYPE_CODE_CHAR)))
 	  && (options->format == 0 || options->format == 's'))
 	val_print_string (type, NULL, value_address (val), len+1, stream,
 			  options);
@@ -311,20 +308,18 @@ m2_value_print_inner (struct value *val, struct ui_file *stream, int recurse,
   const CORE_ADDR address = value_address (val);
 
   struct type *type = check_typedef (value_type (val));
-  switch (TYPE_CODE (type))
+  switch (type->code ())
     {
     case TYPE_CODE_ARRAY:
       if (TYPE_LENGTH (type) > 0 && TYPE_LENGTH (TYPE_TARGET_TYPE (type)) > 0)
 	{
 	  elttype = check_typedef (TYPE_TARGET_TYPE (type));
 	  len = TYPE_LENGTH (type) / TYPE_LENGTH (elttype);
-	  if (options->prettyformat_arrays)
-	    print_spaces_filtered (2 + 2 * recurse, stream);
 	  /* For an array of chars, print with string syntax.  */
 	  if (TYPE_LENGTH (elttype) == 1 &&
-	      ((TYPE_CODE (elttype) == TYPE_CODE_INT)
+	      ((elttype->code () == TYPE_CODE_INT)
 	       || ((current_language->la_language == language_m2)
-		   && (TYPE_CODE (elttype) == TYPE_CODE_CHAR)))
+		   && (elttype->code () == TYPE_CODE_CHAR)))
 	      && (options->format == 0 || options->format == 's'))
 	    {
 	      /* If requested, look for the first null char and only print
@@ -386,7 +381,7 @@ m2_value_print_inner (struct value *val, struct ui_file *stream, int recurse,
       break;
 
     case TYPE_CODE_SET:
-      elttype = TYPE_INDEX_TYPE (type);
+      elttype = type->index_type ();
       elttype = check_typedef (elttype);
       if (TYPE_STUB (elttype))
 	{

@@ -1434,12 +1434,13 @@ read_dbx_symtab (minimal_symbol_reader &reader, struct objfile *objfile)
  	  if (psymtab_language == language_cplus)
  	    {
 	      std::string name (namestring, p - namestring);
-	      std::string new_name = cp_canonicalize_string (name.c_str ());
-	      if (!new_name.empty ())
+	      gdb::unique_xmalloc_ptr<char> new_name
+		= cp_canonicalize_string (name.c_str ());
+	      if (new_name != nullptr)
 		{
-		  sym_len = new_name.length ();
+		  sym_len = strlen (new_name.get ());
 		  sym_name = obstack_strdup (&objfile->objfile_obstack,
-					     new_name);
+					     new_name.get ());
 		}
 	    }
 
@@ -1459,9 +1460,6 @@ read_dbx_symtab (minimal_symbol_reader &reader, struct objfile *objfile)
 	  switch (p[1])
 	    {
 	    case 'S':
-	      if (gdbarch_static_transform_name_p (gdbarch))
-		gdbarch_static_transform_name (gdbarch, namestring);
-
 	      add_psymbol_to_list (gdb::string_view (sym_name, sym_len), true,
 				   VAR_DOMAIN, LOC_STATIC,
 				   data_sect_index,
@@ -2049,8 +2047,7 @@ dbx_end_psymtab (struct objfile *objfile, legacy_psymtab *pst,
       && pst->n_static_syms == 0
       && has_line_numbers == 0)
     {
-      /* Throw away this psymtab, it's empty.  We can't deallocate it, since
-         it is on the obstack, but we can forget to chain it on the list.  */
+      /* Throw away this psymtab, it's empty.  */
       /* Empty psymtabs happen as a result of header files which don't have
          any symbols in them.  There can be a lot of them.  But this check
          is wrong, in that a psymtab with N_SLINE entries but nothing else
