@@ -38,4 +38,4 @@ sudo ln -s /opt/mulle-gdb/10.1.0.0/bin/mulle-gdb /usr/local/bin/mulle-gdb
 ```
 
 You may want to change the options in the [configure-mulle-gdb](configure-mulle-gdb)
-scropt to your liking. I prefer a minimal debugger without python.
+script to your liking. I prefer a minimal debugger without python.
