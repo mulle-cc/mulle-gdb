@@ -11,7 +11,7 @@ then
     flags="--with-gnu-ld"
 fi
 
-# CXXFLAGS='-g3 -O0' CFLAGS='-g3 -O0' \
+CXXFLAGS='-g3 -O0' CFLAGS='-g3 -O0' \
 ./configure \
    --program-prefix="mulle-" \
    --disable-binutils \

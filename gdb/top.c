@@ -1404,12 +1404,16 @@ print_gdb_version (struct ui_file *stream, bool interactive)
 			       ui_file_style::BOLD };
       style = nstyle;
     }
-  fprintf_styled (stream, style, "GNU gdb %s%s\n", PKGVERSION, version);
+  // @mulle-gdb@ copyright >>>
+  fprintf_styled (stream, style, "mulle-gdb %s%s\n", PKGVERSION, version);
 
   /* Second line is a copyright notice.  */
 
   fprintf_filtered (stream,
 		    "Copyright (C) 2020 Free Software Foundation, Inc.\n");
+  fprintf_filtered (stream,
+          "Copyright (C) 2021 Mulle kybernetiK.\n");
+  // @mulle-gdb@ copyright <<<
 
   /* Following the copyright is a brief statement that the program is
      free software, that users are free to copy and change it on

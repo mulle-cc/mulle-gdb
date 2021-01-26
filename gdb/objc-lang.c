@@ -1341,6 +1341,31 @@ read_universe( void)
 }
 
 
+static uint32_t
+read_runtime_version (struct gdbarch *gdbarch)
+{
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  int   len;
+
+  // fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) addr);
+   CORE_ADDR universe;
+
+   universe = read_universe();
+   if( ! universe)
+      return( 0);
+
+   CORE_ADDR version_p;
+   ULONGEST version;
+
+   len        = gdbarch_ptr_bit( gdbarch) / 8;
+   version_p  = universe;
+   version_p += len; // skip cache
+
+   version = read_memory_unsigned_integer( version_p, len, byte_order);
+   return( (uint32_t) (uintptr_t) version);
+}
+
+
 static void
 read_objc_object (struct gdbarch *gdbarch, CORE_ADDR addr,
 		  struct objc_object *object)
@@ -1488,6 +1513,21 @@ search_hashtable(struct gdbarch *gdbarch, CORE_ADDR addr,
 //
 //    struct mulle_concurrent_pointerarray    methodlists;
 //
+//    struct _mulle_objc_infraclass           *infraclass;
+//    struct _mulle_objc_universe             *universe;
+//
+//    //
+//    // TODO: we could have a pointer to the load class and get the id
+//    //       information that way. (wouldn't save a lot though)
+//    //       or move to classpair
+//    //
+//    mulle_objc_classid_t                    classid;
+//    mulle_objc_classid_t                    superclassid;
+//
+//    // TODO: general storage mechanism for KVC, needed in meta ? move to classpair ?
+//    uint16_t                                inheritance;
+//    uint16_t                                preloads;
+//
 //    // vvv - from here on the debugger doesn't care
 
 
@@ -1593,21 +1633,101 @@ read_objc_pointerarray_entry(struct gdbarch *gdbarch,
 }
 
 /* x86_64: magic offsets, address arithmetic in mulle_objc_classpair
+ * see: "mulle-objc-runtime/test-debugger/20_gdb/simulate-gdb/simulate-gdb
+ *
+ * These offsets change for each release though. We need a way to get the
+ * current runtime version and then use the proper offsets. Alternative
+ * the classpair, contains these offsets...
+ *
  * pair.infraclass      = 16
- * pair.metaclass       = 480
- * pair.protocolclasses = 824
+ * pair.metaclass       = 496
+ * pair.protocolclasses = 848
  * i686: magic offsets
  * pair.infraclass      = 8
  * pair.metaclass       = 248
  * pair.protocolclasses = 424
  */
+
+struct gdb_objc_runtime_offsets
+{
+   int infraclass;
+   int metaclass;
+   int protocolclasses;
+};
+
+struct gdb_objc_runtime_version_arch_offsets
+{
+   struct
+   {
+      int  major;
+      int  minor;
+   } version;
+   struct gdb_objc_runtime_offsets  b64;
+   struct gdb_objc_runtime_offsets  b32;
+};
+
+
+static struct gdb_objc_runtime_offsets *
+   get_version_arch_offsets( int major, int minor, int bits)
+{
+   static struct gdb_objc_runtime_version_arch_offsets  runtime_offsets[] =
+   {
+      { { 0, 18 }, { 16, 496, 840 }, { 8, 248, 420 } },
+      { { 0, 19 }, { 16, 496, 848 }, { 8, 248, 424 } }
+   };
+#define n_runtime_offsets (sizeof( runtime_offsets) / sizeof( runtime_offsets[ 0]))
+
+   int   i;
+
+   for( i = 0; i < n_runtime_offsets; i++)
+      if( runtime_offsets[ i].version.major == major && runtime_offsets[ i].version.minor == minor)
+      {
+         switch( bits)
+         {
+         case 64 : return( &runtime_offsets[ i].b64);
+         case 32 : return( &runtime_offsets[ i].b32);
+         }
+         break;
+      }
+   return( NULL);
+}
+
+
+static uint32_t  mulle_objc_runtime_version( struct gdbarch *gdbarch)
+{
+   static uint32_t   version;
+   if( ! version)
+      version = read_runtime_version( gdbarch);
+   return( version);
+}
+
+
+static struct gdb_objc_runtime_offsets  *
+   gdb_runtime_offset_arch( struct gdbarch *gdbarch, int bits)
+{
+   uint32_t   version;
+   uint32_t   major, minor;
+
+   version = mulle_objc_runtime_version( gdbarch);
+   major   = (version >> 20);
+   minor   = (version >> 8) & (1024-1);
+   return( get_version_arch_offsets( major, minor, bits));
+}
+
+
 static inline CORE_ADDR
 metaclass_of_infraclass( struct gdbarch *gdbarch,
                          CORE_ADDR infraAddr)
 {
-  if( gdbarch_ptr_bit( gdbarch) == 64)
-     return( infraAddr + 480 - 16);
-  return( infraAddr + 248 - 8);
+  int   bits;
+  struct gdb_objc_runtime_offsets  *offsets;
+
+  bits    = gdbarch_ptr_bit( gdbarch);
+  offsets = gdb_runtime_offset_arch( gdbarch, bits);
+  if( ! offsets)
+     return( 0);
+  // assert( bits == 64 || bits == 32);
+  return( infraAddr + offsets->metaclass - offsets->infraclass);
 }
 
 
@@ -1629,13 +1749,20 @@ static inline CORE_ADDR
 protocolclass_array_of_metaclass( struct gdbarch *gdbarch,
                                   CORE_ADDR metaAddr)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  enum  bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   int   len;
+  int   bits;
+  struct gdb_objc_runtime_offsets  *offsets;
 
-  len = gdbarch_ptr_bit( gdbarch) / 8;
-  if( gdbarch_ptr_bit( gdbarch) == 64)
-     return( read_memory_unsigned_integer( metaAddr + 824 - 480, len, byte_order));
-  return( read_memory_unsigned_integer( metaAddr + 424 - 248, len, byte_order));
+  bits    = gdbarch_ptr_bit( gdbarch);
+  offsets = gdb_runtime_offset_arch( gdbarch, bits);
+  if( ! offsets)
+     return( 0);
+
+  len  = bits / 8;
+  return( read_memory_unsigned_integer( metaAddr +
+            offsets->protocolclasses -
+            offsets->metaclass, len, byte_order));
 }
 
 
@@ -1671,7 +1798,8 @@ search_superclass( struct gdbarch *gdbarch,
       unsigned long  i, n;
 
       protocolclassesAddr = protocolclass_array_of_metaclass( gdbarch, classAddr);
-
+      if( ! protocolclassesAddr)
+         return( 0);
       // get storage
 
 
@@ -1687,6 +1815,8 @@ search_superclass( struct gdbarch *gdbarch,
             break;
 
          protoclassMetaAddr = metaclass_of_infraclass( gdbarch, protoclassAddr);
+         if( ! protoclassMetaAddr)
+            break;
          if( protoclassMetaAddr != classAddr)
          {
             supercls = protoclassMetaAddr;
@@ -1860,13 +1990,13 @@ find_implementation_from_protocol_classes( struct gdbarch *gdbarch,
                                            long inheritance,
                                            long startClassid)
 {
-   CORE_ADDR       found;
-   CORE_ADDR       infraAddr;
-   CORE_ADDR       metaAddr;
-   CORE_ADDR       protocolclassesAddr;
-   CORE_ADDR       protoclassAddr;
-   unsigned long   i, n;
-   int             is_meta;
+   CORE_ADDR           found;
+   CORE_ADDR           infraAddr;
+   CORE_ADDR           metaAddr;
+   CORE_ADDR           protocolclassesAddr;
+   CORE_ADDR           protoclassAddr;
+   unsigned long       i, n;
+   int                 is_meta;
    struct objc_class   class_str;
 
    // fprintf( stderr, "%s :: %p %p (%s)\n", __PRETTY_FUNCTION__, (void *) addr, (void *) sel, p_class->infra_class ? "is meta" : "is infra");
@@ -1882,7 +2012,8 @@ find_implementation_from_protocol_classes( struct gdbarch *gdbarch,
       is_meta   = 0;
       infraAddr = addr;
       metaAddr  = metaclass_of_infraclass( gdbarch, infraAddr);
-
+      if( ! metaAddr)
+         return( 0);
       read_objc_class( gdbarch, metaAddr, &class_str);
       if( class_str.isa == 0)
          return( 0);
@@ -1891,7 +2022,8 @@ find_implementation_from_protocol_classes( struct gdbarch *gdbarch,
 
    // offset
    protocolclassesAddr = protocolclass_array_of_metaclass( gdbarch, metaAddr);
-
+   if( ! protocolclassesAddr)
+      return( 0);
    // storage
 
    // first entry after meta is then the protocol classes array
@@ -1908,7 +2040,11 @@ find_implementation_from_protocol_classes( struct gdbarch *gdbarch,
          break;
 
       if( is_meta)
+      {
          protoclassAddr = metaclass_of_infraclass( gdbarch, protoclassAddr);
+         if( ! protoclassAddr)
+            return( 0);
+      }
 
       // just look through local list and don't walk
       found = find_implementation_from_class( gdbarch, protoclassAddr, sel, 0xFFFF, startClassid);
@@ -2033,6 +2169,7 @@ static int resolve_msgsend (CORE_ADDR pc, CORE_ADDR *new_pc);
 //static int resolve_msgsend_stret (CORE_ADDR pc, CORE_ADDR *new_pc);
 static int resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc);
 //static int resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc);
+static int resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc);
 
 static struct objc_methcall methcalls[] = {
 //  { "_objc_msgSend", resolve_msgsend, 0, 0},
@@ -2042,6 +2179,7 @@ static struct objc_methcall methcalls[] = {
 //  { "_objc_getClass", NULL, 0, 0},
 //  { "mulle_objc_object_call", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_class_nofail", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 }
 //  { "_objc_getMetaClass", NULL, 0, 0}
@@ -2074,8 +2212,8 @@ find_objc_msgsend (void)
    }
       if (func.minsym == NULL)
    {
-          // fprintf( stderr, "%s :: did not find \"%s\"\n",
-          //               __PRETTY_FUNCTION__, methcalls[i].name);
+     fprintf( stderr, "%s :: did not find \"%s\"\n",
+                   __PRETTY_FUNCTION__, methcalls[i].name);
      methcalls[i].begin = 0;
      methcalls[i].end = 0;
      continue;
@@ -2083,11 +2221,11 @@ find_objc_msgsend (void)
 
       methcalls[i].begin = BMSYMBOL_VALUE_ADDRESS (func);
       methcalls[i].end = minimal_symbol_upper_bound (func);
-      //fprintf( stderr, "%s :: found \"%s\" at %p-%p\n",
-      //                  __PRETTY_FUNCTION__,
-      //                  methcalls[i].name,
-      //                  (void *) methcalls[i].begin,
-      //                  (void *) methcalls[i].end);
+      fprintf( stderr, "%s :: found \"%s\" at %p-%p\n",
+                        __PRETTY_FUNCTION__,
+                        methcalls[i].name,
+                        (void *) methcalls[i].begin,
+                        (void *) methcalls[i].end);
     }
 }
 
@@ -2276,6 +2414,39 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
     return 1;
   return 0;
 }
+
+
+static int
+resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc)
+{
+  struct frame_info *frame = get_current_frame ();
+  struct gdbarch *gdbarch = get_frame_arch (frame);
+  struct type *ptr_type = builtin_type (gdbarch)->builtin_data_ptr;
+
+  CORE_ADDR classAddr;
+  CORE_ADDR methodid;
+
+//  object  = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
+  methodid = gdbarch_fetch_pointer_argument (gdbarch, frame, 1, ptr_type);
+  if( ! methodid)
+     return( 0);
+  // fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+
+  classAddr = gdbarch_fetch_pointer_argument (gdbarch, frame, 3, ptr_type);
+  // fprintf( stderr, "%s :: superid=%p\n", __PRETTY_FUNCTION__, (void *) superid);
+  if( ! classAddr)
+     return( 0);
+
+  CORE_ADDR res;
+
+  res = find_implementation_from_class( gdbarch, classAddr, methodid, -1, 0);
+  if (new_pc != 0)
+    *new_pc = res;
+  if (res == 0)
+    return 1;
+  return 0;
+}
+
 
 //static int
 //resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc)
