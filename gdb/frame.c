@@ -558,14 +558,14 @@ skip_tailcall_frames (struct frame_info *frame)
 	break;
     }
 
-  // @mulle-obj@ ignore boring frames >
+  // @mulle-gdb@ ignore boring frames >
   {
       extern int   mulle_is_boring_frame( frame_info *frame, int level);
 
       while( frame && mulle_is_boring_frame(frame, -1))
         frame = get_prev_frame (frame);
   }
-  // @mulle-obj@ ignore boring frames <
+  // @mulle-gdb@ ignore boring frames <
   return frame;
 }
 

@@ -6834,12 +6834,12 @@ process_event_stop_test (struct execution_control_state *ecs)
       if (real_stop_pc != 0)
 	ecs->stop_func_start = real_stop_pc;
 
-   // @mulle-objc@ hacque! >
+   // @mulle-gdb@ hacque! >
    //   if (real_stop_pc != 0) && in_solib_dynsym_resolve_code (real_stop_pc))
       if (real_stop_pc != 0)
 	{
       in_solib_dynsym_resolve_code (real_stop_pc); // ignore return value
-   // @mulle-objc@ hacque! >
+   // @mulle-gdb@ hacque! >
 	  symtab_and_line sr_sal;
 	  sr_sal.pc = ecs->stop_func_start;
 	  sr_sal.pspace = get_frame_program_space (frame);

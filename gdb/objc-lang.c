@@ -341,9 +341,9 @@ static const struct op_print objc_op_print_tab[] =
 
 static const char *objc_extensions[] =
 {
-// @mulle-objc@ file type .aam >
+// @mulle-gdb@ file type .aam >
    ".aam",
-// @mulle-objc@ file type .aam >
+// @mulle-gdb@ file type .aam >
   ".m", NULL
 };
 
@@ -1268,7 +1268,7 @@ read_objc_method (struct gdbarch *gdbarch, CORE_ADDR addr,
 		  struct objc_method *method)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  // @mulle-objc@ fix size >
+  // @mulle-gdb@ fix size >
   int   len;
 
   // fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) addr);
@@ -1297,7 +1297,7 @@ static unsigned long
 read_objc_methlist_nmethods (struct gdbarch *gdbarch, CORE_ADDR addr)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  // @mulle-objc@ fix size >
+  // @mulle-gdb@ fix size >
   int   len;
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
@@ -1437,7 +1437,7 @@ search_hashtable(struct gdbarch *gdbarch, CORE_ADDR addr,
                  CORE_ADDR search)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-// @mulle-objc@ fix isa offset >
+// @mulle-gdb@ fix isa offset >
   int   len;
 
   // fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) addr);
@@ -1488,7 +1488,7 @@ search_hashtable(struct gdbarch *gdbarch, CORE_ADDR addr,
 }
 
 
-// @mulle-objc@ read class
+// @mulle-gdb@ read class
 // struct _mulle_objc_methodcachepivot
 // {
 //    struct _mulle_objc_cachepivot   pivot; // for atomic XCHG with pointer indirection
@@ -1536,7 +1536,7 @@ read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
 		 struct objc_class *theclass)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-// @mulle-objc@  >
+// @mulle-gdb@  >
   int   len;
 
   // fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) addr);
@@ -1579,7 +1579,7 @@ read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
 //  theclass->ivars = read_memory_unsigned_integer (addr + 24, 4, byte_order);
 //  theclass->cache = read_memory_unsigned_integer (addr + 32, 4, byte_order);
 //  theclass->protocols = read_memory_unsigned_integer (addr + 36, 4, byte_order);
-// @mulle-objc@  <
+// @mulle-gdb@  <
 
   // small sanity checks
   if( theclass->inheritance >= 0x20 ||
@@ -1606,7 +1606,7 @@ static unsigned long
 read_objc_pointerarray_count(struct gdbarch *gdbarch, CORE_ADDR addr)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  // @mulle-objc@ fix size >
+  // @mulle-gdb@ fix size >
   int   len;
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
@@ -1828,7 +1828,7 @@ search_superclass( struct gdbarch *gdbarch,
 }
 
 
-// @mulle-objc@ we are traversing at first a pointer to  a
+// @mulle-gdb@ we are traversing at first a pointer to  a
 // struct _mulle_concurrent_pointerarraystorage
 // {
 //    mulle_atomic_pointer_t   n;
@@ -2112,6 +2112,8 @@ find_implementation_from_class (struct gdbarch *gdbarch,
       classAddr = search_superclass( gdbarch, classAddr, &class_str, inheritance);
       if( ! classAddr)
         return( 0);
+
+     inheritance = -1; // use superclass inheritance
   }
 
   return 0;
