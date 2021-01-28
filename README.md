@@ -42,3 +42,24 @@ sudo ln -s "/opt/mulle-gdb/${MULLE_GDB_VERSION}/bin/mulle-gdb" \
 
 You may want to change the options in the [configure-mulle-gdb](configure-mulle-gdb)
 script to your liking. I prefer a minimal debugger without python.
+
+### MacOS
+
+Does it work on macOS ? Maybe. Beware though, that macOS is a consumer platform
+and not a developer platform.
+
+Here are some links to get **mulle-gdb** to run:
+
+* [GDB Wiki PermissionsDarwin](//sourceware.org/gdb/wiki/PermissionsDarwin#Sign_and_entitle_the_gdb_binary)
+* [Stackoverflow 1](//stackoverflow.com/questions/18423124/please-check-gdb-is-codesigned-see-taskgated8-how-to-get-gdb-installed-w)
+* [Stackoverflow 2](//stackoverflow.com/questions/54416996/gdb-on-macos-mojave-10-14-2)
+
+Hangs:
+
+* [Getting gdb to (semi) reliably work](//timnash.co.uk/getting-gdb-to-semi-reliably-work-on-mojave-macos/)
+
+> #### Note
+>
+> Even properly signed I need `sudo DevToolsSecurity -enable` to debug
+> something.
+>
