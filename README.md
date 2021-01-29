@@ -38,8 +38,8 @@ MULLE_GDB_VERSION=10.1.0.1
 ./configure-mulle-gdb --prefix "/opt/mulle-gdb/${MULLE_GDB_VERSION}"
 make -j 8
 sudo make install
-sudo ln -s "/opt/mulle-gdb/${MULLE_GDB_VERSION}/bin/mulle-gdb" \
-           "/usr/local/bin/mulle-gdb"
+sudo ln -f -s "/opt/mulle-gdb/${MULLE_GDB_VERSION}/bin/mulle-gdb" \
+              "/usr/local/bin/mulle-gdb"
 ```
 
 You may want to change the options in the [configure-mulle-gdb](configure-mulle-gdb)

@@ -11,7 +11,13 @@ then
     flags="--with-gnu-ld"
 fi
 
-CXXFLAGS='-g3 -O0' CFLAGS='-g3 -O0' \
+#
+# make distclean or maintainer-clean can't wipe the config.cache files
+# which keep the CFLAGS, so do it myself
+#
+find . -name config.cache -exec rm {} \;
+
+#CXXFLAGS='-g3 -O0' CFLAGS='-g3 -O0' \
 ./configure \
    --program-prefix="mulle-" \
    --disable-binutils \
