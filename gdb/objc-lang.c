@@ -2223,11 +2223,11 @@ find_objc_msgsend (void)
 
       methcalls[i].begin = BMSYMBOL_VALUE_ADDRESS (func);
       methcalls[i].end = minimal_symbol_upper_bound (func);
-      fprintf( stderr, "%s :: found \"%s\" at %p-%p\n",
-                        __PRETTY_FUNCTION__,
-                        methcalls[i].name,
-                        (void *) methcalls[i].begin,
-                        (void *) methcalls[i].end);
+      //fprintf( stderr, "%s :: found \"%s\" at %p-%p\n",
+      //                  __PRETTY_FUNCTION__,
+      //                  methcalls[i].name,
+      //                  (void *) methcalls[i].begin,
+      //                  (void *) methcalls[i].end);
     }
 }
 
