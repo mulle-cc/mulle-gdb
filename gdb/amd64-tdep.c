@@ -2744,7 +2744,7 @@ amd64_gen_return_address (struct gdbarch *gdbarch,
 }
 
 
-// mulle-objc >
+// @mulle-gdb@ >
 static CORE_ADDR
 amd64_fetch_pointer_argument (struct frame_info *frame, int argi,
               struct type *type)
@@ -2770,7 +2770,7 @@ amd64_fetch_pointer_argument (struct frame_info *frame, int argi,
   }
   return( get_frame_register_unsigned( frame, regnum));
 }
-// mulle-objc <
+// @mulle-gdb@ <
 
 /* Signal trampolines.  */
 

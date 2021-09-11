@@ -1279,13 +1279,13 @@ read_objc_method (struct gdbarch *gdbarch, CORE_ADDR addr,
   // alignment, runtime should make this explicit!
   method->sel   = read_memory_unsigned_integer (addr, 4, byte_order);
   addr += len;
-  method->types = read_memory_unsigned_integer (addr, len, byte_order);
+  method->types = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len;
-  method->name  = read_memory_unsigned_integer (addr, len, byte_order);
+  method->name  = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len;
 
   addr += len; // skip bits
-  method->imp   = read_memory_unsigned_integer (addr, len, byte_order);
+  method->imp   = read_memory_unsigned_integer( addr, len, byte_order);
 
   // fprintf( stderr, "%s :: sel   = %p\n", __PRETTY_FUNCTION__, (void *) method->sel );
   // fprintf( stderr, "%s :: types = %p\n", __PRETTY_FUNCTION__, (void *) method->types);
@@ -1301,7 +1301,7 @@ read_objc_methlist_nmethods (struct gdbarch *gdbarch, CORE_ADDR addr)
   int   len;
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
-  return read_memory_unsigned_integer(addr, len, byte_order);
+  return read_memory_unsigned_integer( addr, len, byte_order);
   // @mulle-obcj@ fix size <
 }
 
@@ -1381,7 +1381,7 @@ read_objc_object (struct gdbarch *gdbarch, CORE_ADDR addr,
   if( ! (addr & 0x1))
   {
      addr = addr - len;
-     object->isa = read_memory_unsigned_integer(addr, len, byte_order);
+     object->isa = read_memory_unsigned_integer( addr, len, byte_order);
      return;
   }
    // it's a TPS instance! Get the mulle_objc_defaultuniverse
@@ -1489,32 +1489,29 @@ search_hashtable(struct gdbarch *gdbarch, CORE_ADDR addr,
 
 
 // @mulle-gdb@ read class
+// struct _mulle_objc_cachepivot
+// {
+//    mulle_atomic_pointer_t   entries; // for atomic XCHG with pointer indirection
+// };
 // struct _mulle_objc_methodcachepivot
 // {
 //    struct _mulle_objc_cachepivot   pivot; // for atomic XCHG with pointer indirection
-//    mulle_objc_implementation_t     call2;
 // };
 // struct _mulle_objc_class
 // {
-//    struct _mulle_objc_methodcachepivot    cachepivot;  // DON'T MOVE
+//    struct _mulle_objc_methodcachepivot     cachepivot;  // DON'T MOVE
 //
-//    void                                   *(*call)( void *,
-//                                                     mulle_objc_methodid_t,
-//                                                     void *,
-//                                                     struct _mulle_objc_class *);
+//    /* ^^^ keep above like this, or change mulle_objc_fastmethodtable fault (void **)[ 0] */
 //
-//    /* ^^^ keep above like this, or change mulle_objc_fastmethodtable fault */
-//
-//    // keep name, superclass, allocationsize in this order for lldb debugging
-//
-//    struct _mulle_objc_class                *superclass;      // keep here for debugger (void **)[ 3]
-//    char                                    *name;            // offset (void **)[ 4]
-//    uintptr_t                               allocationsize;   // instancesize + header   (void **)[ 5]
-//
-//    struct mulle_concurrent_pointerarray    methodlists;
+//    // keep name, superclass, allocationsize in this order for gdb debugging
+//    struct _mulle_objc_class                *superclass;      // keep here for debugger (void **)[ 1]
+//    char                                    *name;            // offset (void **)[ 2]
+//    uintptr_t                               allocationsize;   // instancesize + header   (void **)[ 3]
 //
 //    struct _mulle_objc_infraclass           *infraclass;
 //    struct _mulle_objc_universe             *universe;
+//
+//    struct mulle_concurrent_pointerarray    methodlists;
 //
 //    //
 //    // TODO: we could have a pointer to the load class and get the id
@@ -1543,28 +1540,31 @@ read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
 
-  theclass->isa = read_memory_unsigned_integer (addr - len, len, byte_order);
+  // isa = &[ -1]
+  theclass->isa = read_memory_unsigned_integer( addr - len, len, byte_order);
 
-  addr += len * (2 + 1); // skip cachepivot + call
+  addr += len; // skip cachepivot
 
-  theclass->super_class = read_memory_unsigned_integer (addr , len, byte_order);
+  // &[ 1]
+  theclass->super_class = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len;
 
-  theclass->name = read_memory_unsigned_integer (addr, len, byte_order);
+  theclass->name = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len;
 
-  theclass->allocation_size = read_memory_unsigned_integer (addr, len, byte_order);
+  theclass->allocation_size = read_memory_unsigned_integer( addr, len, byte_order);
+  addr += len;
+
+  theclass->infra_class = read_memory_unsigned_integer( addr, len, byte_order);
+  addr += len;
+
+  theclass->universe = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len;
 
   // fprintf( stderr, "%s :: &method_lists=%p\n", __PRETTY_FUNCTION__, (void *) addr);
-  theclass->methods = read_memory_unsigned_integer (addr, len, byte_order);
+
+  theclass->methods = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len * 3;
-
-  theclass->infra_class = read_memory_unsigned_integer (addr, len, byte_order);
-  addr += len;
-
-  theclass->universe = read_memory_unsigned_integer (addr, len, byte_order);
-  addr += len;
 
   theclass->classid = read_memory_unsigned_integer(addr, 4, byte_order);
   addr += 4;
@@ -1589,8 +1589,6 @@ read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
       memset( theclass, 0, sizeof( *theclass));
   }
 }
-
-
 
 
 enum
@@ -1792,9 +1790,9 @@ search_superclass( struct gdbarch *gdbarch,
    {
       // Ok we'd be transitioning from metaclass to infraclass
       // Use protocolclass if available
-      CORE_ADDR      protocolclassesAddr;
-      CORE_ADDR      protoclassAddr;
-      CORE_ADDR      protoclassMetaAddr;
+      CORE_ADDR   protocolclassesAddr;
+      CORE_ADDR   protoclassAddr;
+      CORE_ADDR   protoclassMetaAddr;
       unsigned long  i, n;
 
       protocolclassesAddr = protocolclass_array_of_metaclass( gdbarch, classAddr);
@@ -2173,6 +2171,7 @@ static int resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc);
 //static int resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc);
 static int resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc);
 
+// the inline function might appear with -O0 compilation ?
 static struct objc_methcall methcalls[] = {
 //  { "_objc_msgSend", resolve_msgsend, 0, 0},
 //  { "_objc_msgSend_stret", resolve_msgsend_stret, 0, 0},
@@ -2181,8 +2180,16 @@ static struct objc_methcall methcalls[] = {
 //  { "_objc_getClass", NULL, 0, 0},
 //  { "mulle_objc_object_call", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call", resolve_msgsend, 0, 0},
-  { "_mulle_objc_object_call_class_nofail", resolve_msgsend_class, 0, 0},
+//  { "_mulle_objc_object_call_inline", resolve_msgsend, 0, 0},
+//  { "_mulle_objc_object_call_inline_partial", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call2", resolve_msgsend, 0, 0},
+//  { "_mulle_objc_object_call_variablemethodid", resolve_msgsend, 0, 0},
+//  { "_mulle_objc_object_call_variablemethodid_inline", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_class", resolve_msgsend_class, 0, 0},
+  { "_mulle_objc_object_call_class_needcache", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
+//  { "_mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
+//  { "_mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 }
 //  { "_objc_getMetaClass", NULL, 0, 0}
 };
@@ -2212,10 +2219,13 @@ find_objc_msgsend (void)
    {
      func = lookup_bound_minimal_symbol (methcalls[i].name + 1);
    }
-      if (func.minsym == NULL)
+
+   if (func.minsym == NULL)
    {
+#if DEBUG
      fprintf( stderr, "%s :: did not find \"%s\"\n",
                    __PRETTY_FUNCTION__, methcalls[i].name);
+#endif
      methcalls[i].begin = 0;
      methcalls[i].end = 0;
      continue;

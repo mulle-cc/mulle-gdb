@@ -11,6 +11,13 @@ digit is the mulle version. (e.g. 10.1 > 10.1.0.0)
 
 Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.18 (or 0.19 currently in development).
 
+## Source
+
+The majority of the changes are predictably in [gdb/objc-lang.c](). They are
+not specifically marked. Changes outside of this file should be marked
+'// @mulle-gdb' and therefore easy to find.
+
+
 ## Releasenotes
 
 * (hardcoded) mulle-objc runtime functions do not appear in the stacktrace
