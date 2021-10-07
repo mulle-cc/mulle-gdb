@@ -9,7 +9,7 @@ known to work, i386 may work.
 The version tracks that of gdb, but extends it to 4 parts, where the last
 digit is the mulle version. (e.g. 10.1 > 10.1.0.0)
 
-Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.18 (or 0.19 currently in development).
+Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.20.
 
 ## Source
 
@@ -41,7 +41,7 @@ build-essential | c++, make etc.
 
 
 ``` bash
-MULLE_GDB_VERSION=10.1.0.1
+MULLE_GDB_VERSION=10.1.0.2
 ./configure-mulle-gdb --prefix "/opt/mulle-gdb/${MULLE_GDB_VERSION}"
 make -j 8
 sudo make install
@@ -51,6 +51,7 @@ sudo ln -f -s "/opt/mulle-gdb/${MULLE_GDB_VERSION}/bin/mulle-gdb" \
 
 You may want to change the options in the [configure-mulle-gdb](configure-mulle-gdb)
 script to your liking. I prefer a minimal debugger without python.
+
 
 ### MacOS
 

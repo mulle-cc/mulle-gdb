@@ -51,6 +51,11 @@
 #endif
 
 
+//#define DEBUG_VERBOSE 1 // (defined( DEBUG) & 1)
+//#if DEBUG_VERBOSE
+//# warning "DEBUG_VERBOSE defined"
+//#endif
+
 //
 // This file has been changed to work with mulle-objc
 //
@@ -445,7 +450,9 @@ public:
 };
 
 /* Single instance of the class representing the Objective-C language.  */
-
+/*
+ * MEMO: in the constructor this adds itself to an array of languages...
+ */
 static objc_language objc_language_defn;
 
 /*
@@ -1400,12 +1407,13 @@ read_objc_object (struct gdbarch *gdbarch, CORE_ADDR addr,
    // fprintf( stderr, "%s :: universe=%p\n", __PRETTY_FUNCTION__, (void *) universe);
    // now get to TPS table
    tpsTable = universe;
-   tpsTable += len; // skip cache
+   tpsTable += len;     // skip cache
    tpsTable += 2 * len; // skip version + path
 
-   tpsTable += 5 * (3 * len); // skip 5 hashmaps
-   tpsTable += 3 * (3 * len); // skip 5 pointerarrays
+   tpsTable += 6 * (3 * len); // skip 6 hashmaps
+   tpsTable += 3 * (3 * len); // skip 3 pointerarrays
 
+   // arrive at "taggedpointers"
    // fprintf( stderr, "%s :: tpsTable=%p\n", __PRETTY_FUNCTION__, (void *) tpsTable);
    tpsIndex = addr & (len == 8 ? 0x7 : 0x3);
    // fprintf( stderr, "%s :: tpsIndex=%d\n", __PRETTY_FUNCTION__, tpsIndex);
@@ -1526,8 +1534,6 @@ search_hashtable(struct gdbarch *gdbarch, CORE_ADDR addr,
 //    uint16_t                                preloads;
 //
 //    // vvv - from here on the debugger doesn't care
-
-
 static void
 read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
 		 struct objc_class *theclass)
@@ -2171,7 +2177,10 @@ static int resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc);
 //static int resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc);
 static int resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc);
 
-// the inline function might appear with -O0 compilation ?
+//
+// the inline function might appear with no optimization compilation
+// the MULLE_C_ALWAYS_INLINE is not super-respected by compilers
+//
 static struct objc_methcall methcalls[] = {
 //  { "_objc_msgSend", resolve_msgsend, 0, 0},
 //  { "_objc_msgSend_stret", resolve_msgsend_stret, 0, 0},
@@ -2179,17 +2188,36 @@ static struct objc_methcall methcalls[] = {
 //  { "_objc_msgSendSuper_stret", resolve_msgsend_super_stret, 0, 0},
 //  { "_objc_getClass", NULL, 0, 0},
 //  { "mulle_objc_object_call", resolve_msgsend, 0, 0},
+
+// TODO: mulle_objc_object_call is found like this only I don't know why
+  { "mulle_objc_object_call", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call", resolve_msgsend, 0, 0},
-//  { "_mulle_objc_object_call_inline", resolve_msgsend, 0, 0},
-//  { "_mulle_objc_object_call_inline_partial", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_inline", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_inline_minimal", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_inline_partial", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call2", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_variablemethodid", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_variablemethodid_inline", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_class", resolve_msgsend_class, 0, 0},
+  { "mulle_objc_object_call_class_needcache", resolve_msgsend_class, 0, 0},
+  { "mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
+  { "mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
+  { "mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
+  { "mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 },
+
+  { "_mulle_objc_object_call", resolve_msgsend, 0, 0},
+  { "__mulle_objc_object_call", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_inline", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_inline_minimal", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_inline_partial", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call2", resolve_msgsend, 0, 0},
-//  { "_mulle_objc_object_call_variablemethodid", resolve_msgsend, 0, 0},
-//  { "_mulle_objc_object_call_variablemethodid_inline", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_variablemethodid", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_variablemethodid_inline", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_class", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_call_class_needcache", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
-//  { "_mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
-//  { "_mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 }
 //  { "_objc_getMetaClass", NULL, 0, 0}
 };
@@ -2207,38 +2235,40 @@ static struct objc_methcall methcalls[] = {
 static void
 find_objc_msgsend (void)
 {
-  unsigned int i;
+   unsigned int i;
 
-  for (i = 0; i < nmethcalls; i++)
-    {
+   for (i = 0; i < nmethcalls; i++)
+   {
       struct bound_minimal_symbol func;
 
       /* Try both with and without underscore.  */
       func = lookup_bound_minimal_symbol (methcalls[i].name);
       if ((func.minsym == NULL) && (methcalls[i].name[0] == '_'))
-   {
-     func = lookup_bound_minimal_symbol (methcalls[i].name + 1);
-   }
+      {
+        func = lookup_bound_minimal_symbol (methcalls[i].name + 1);
+      }
 
-   if (func.minsym == NULL)
-   {
-#if DEBUG
-     fprintf( stderr, "%s :: did not find \"%s\"\n",
-                   __PRETTY_FUNCTION__, methcalls[i].name);
+      if (func.minsym == NULL)
+      {
+#if DEBUG_VERBOSE
+        fprintf( stderr, "%s :: did not find \"%s\"\n",
+                      __PRETTY_FUNCTION__, methcalls[i].name);
 #endif
-     methcalls[i].begin = 0;
-     methcalls[i].end = 0;
-     continue;
-   }
+        methcalls[i].begin = 0;
+        methcalls[i].end = 0;
+        continue;
+      }
 
       methcalls[i].begin = BMSYMBOL_VALUE_ADDRESS (func);
       methcalls[i].end = minimal_symbol_upper_bound (func);
-      //fprintf( stderr, "%s :: found \"%s\" at %p-%p\n",
-      //                  __PRETTY_FUNCTION__,
-      //                  methcalls[i].name,
-      //                  (void *) methcalls[i].begin,
-      //                  (void *) methcalls[i].end);
-    }
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: found \"%s\" at %p-%p\n",
+                        __PRETTY_FUNCTION__,
+                        methcalls[i].name,
+                        (void *) methcalls[i].begin,
+                        (void *) methcalls[i].end);
+#endif
+   }
 }
 
 
@@ -2265,14 +2295,26 @@ find_objc_msgcall_submethod (int (*f) (CORE_ADDR, CORE_ADDR *),
   try
     {
       if (f (pc, new_pc) == 0)
-   return 1;
+      {
+#if DEBUG_VERBOSE
+         fprintf( stderr, "%s :: found endpoint\n", __PRETTY_FUNCTION__);
+#endif
+
+         return 1;
+      }
     }
   catch (const gdb_exception &ex)
     {
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: booom shakalaka\n", __PRETTY_FUNCTION__);
+#endif
       exception_fprintf (gdb_stderr, ex,
           "Unable to determine target of "
           "Objective-C method call (ignoring):\n");
     }
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: did not found\n", __PRETTY_FUNCTION__);
+#endif
   return 0;
 }
 
@@ -2282,24 +2324,30 @@ find_objc_msgcall (CORE_ADDR pc, CORE_ADDR *new_pc)
 {
   unsigned int i;
 
-  find_objc_msgsend ();
+  find_objc_msgsend();
   if (new_pc != NULL)
     {
       *new_pc = 0;
     }
 
-  // fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) pc);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) pc);
+#endif
   for (i = 0; i < nmethcalls; i++)
     if ((pc >= methcalls[i].begin) && (pc < methcalls[i].end))
-      {
-   if (methcalls[i].stop_at != NULL)
-     return find_objc_msgcall_submethod (methcalls[i].stop_at,
-                     pc, new_pc);
-   else
-     return 0;
-      }
+    {
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: match %p\n", __PRETTY_FUNCTION__, (void *) methcalls[i].begin);
+#endif
+      if (methcalls[i].stop_at != NULL)
+        return find_objc_msgcall_submethod (methcalls[i].stop_at,
+                        pc, new_pc);
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: but no stop at known\n", __PRETTY_FUNCTION__);
+#endif
+    }
 
-  return 0;
+   return 0;
 }
 
 
@@ -2315,16 +2363,19 @@ resolve_msgsend (CORE_ADDR pc, CORE_ADDR *new_pc)
   CORE_ADDR sel;
   CORE_ADDR res;
 
-  // fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
-
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+#endif
   object = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
 
-  // fprintf( stderr, "%s ::object=%p\n", __PRETTY_FUNCTION__, (void *) object);
-
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s ::object=%p\n", __PRETTY_FUNCTION__, (void *) object);
+#endif
   sel = gdbarch_fetch_pointer_argument (gdbarch, frame, 1, ptr_type);
 
-  // fprintf( stderr, "%s ::sel=%p\n", __PRETTY_FUNCTION__, (void *) sel);
-
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s ::sel=%p\n", __PRETTY_FUNCTION__, (void *) sel);
+#endif
   res = find_implementation (gdbarch, object, sel);
   if (new_pc != 0)
     *new_pc = res;
@@ -2370,10 +2421,14 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
 
 //  object  = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
 //  sel     = gdbarch_fetch_pointer_argument (gdbarch, frame, 1, ptr_type);
-  // fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+#endif
 
   superid = gdbarch_fetch_pointer_argument (gdbarch, frame, 3, ptr_type);
-  // fprintf( stderr, "%s :: superid=%p\n", __PRETTY_FUNCTION__, (void *) superid);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: superid=%p\n", __PRETTY_FUNCTION__, (void *) superid);
+#endif
   if( ! superid)
      return( 0);
 
@@ -2387,12 +2442,12 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
 
   int   len;
 
-  // fprintf( stderr, "%s :: %p\n", __PRETTY_FUNCTION__, (void *) addr);
-
   len = gdbarch_ptr_bit( gdbarch) / 8;
 
   //    _mulle_concurrent_hashmap_lookup
-      // fprintf( stderr, "%s :: universe=%p\n", __PRETTY_FUNCTION__, (void *) universe);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: universe=%p\n", __PRETTY_FUNCTION__, (void *) universe);
+#endif
       // now get to TPS table
   classTable  = universe;
   classTable += len; // skip cache
@@ -2442,10 +2497,15 @@ resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc)
   methodid = gdbarch_fetch_pointer_argument (gdbarch, frame, 1, ptr_type);
   if( ! methodid)
      return( 0);
-  // fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+#endif
 
   classAddr = gdbarch_fetch_pointer_argument (gdbarch, frame, 3, ptr_type);
-  // fprintf( stderr, "%s :: superid=%p\n", __PRETTY_FUNCTION__, (void *) superid);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: classAddr=%p\n", __PRETTY_FUNCTION__, (void *) classAddr);
+#endif
   if( ! classAddr)
      return( 0);
 
