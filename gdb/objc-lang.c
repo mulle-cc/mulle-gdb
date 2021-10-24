@@ -439,10 +439,17 @@ public:
 
     if (method_stop_pc)
       {
-	real_stop_pc = gdbarch_skip_trampoline_code
-	  (gdbarch, frame, method_stop_pc);
-	if (real_stop_pc == 0)
-	  real_stop_pc = method_stop_pc;
+         if( method_stop_pc == (CORE_ADDR) -1)
+         {
+            real_stop_pc = frame_unwind_caller_pc( frame);
+         }
+         else
+         {
+         	real_stop_pc = gdbarch_skip_trampoline_code
+         	  (gdbarch, frame, method_stop_pc);
+         	if (real_stop_pc == 0)
+         	  real_stop_pc = method_stop_pc;
+         }
       }
 
     return real_stop_pc;
@@ -2342,9 +2349,13 @@ find_objc_msgcall (CORE_ADDR pc, CORE_ADDR *new_pc)
       if (methcalls[i].stop_at != NULL)
         return find_objc_msgcall_submethod (methcalls[i].stop_at,
                         pc, new_pc);
+      // if we have no stop at, its probably calls lookup which we consider
+      // boring
 #if DEBUG_VERBOSE
       fprintf( stderr, "%s :: but no stop at known\n", __PRETTY_FUNCTION__);
 #endif
+      *new_pc = (CORE_ADDR) -1;
+      return( 1);
     }
 
    return 0;
