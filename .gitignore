@@ -19,6 +19,7 @@
 
 .deps
 .libs
+.mulle/var
 
 autom4te.cache
 config.cache
@@ -66,6 +67,8 @@ REVISION
 
 stamp-*
 *.stamp
+
+.mulle/var/
 
 # ignore in-tree prerequisites
 /mpfr*
