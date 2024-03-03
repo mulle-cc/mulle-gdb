@@ -2739,6 +2739,35 @@ amd64_gen_return_address (struct gdbarch *gdbarch,
 }
 
 
+// @mulle-gdb@ add pointer fetch code to amd64 (1) >
+static CORE_ADDR
+amd64_fetch_pointer_argument (struct frame_info *frame, int argi,
+              struct type *type)
+{
+  struct gdbarch *gdbarch = get_frame_arch (frame);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR sp;
+  int regnum;
+  int len;
+
+  switch( argi)
+  {
+  case 0  : regnum = AMD64_RDI_REGNUM; break;
+  case 1  : regnum = AMD64_RSI_REGNUM; break;
+  case 2  : regnum = AMD64_RDX_REGNUM; break;
+  case 3  : regnum = AMD64_RCX_REGNUM; break;
+  case 4  : regnum = AMD64_R8_REGNUM; break;
+  case 5  : regnum = AMD64_R9_REGNUM; break;
+
+  default : sp  = get_frame_register_unsigned( frame, AMD64_RSP_REGNUM);
+            len = gdbarch_ptr_bit( gdbarch) / 8;
+            return read_memory_unsigned_integer (sp + (len * (argi - 5)), len, byte_order);
+  }
+  return( get_frame_register_unsigned( frame, regnum));
+}
+// @mulle-gdb@ add pointer fetch code to amd64 (1) <
+
+
 /* Signal trampolines.  */
 
 /* FIXME: kettenis/20030419: Perhaps, we can unify the 32-bit and
@@ -3291,6 +3320,10 @@ amd64_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch,
   tdep->record_regmap = amd64_record_regmap;
 
   set_gdbarch_dummy_id (gdbarch, amd64_dummy_id);
+
+// @mulle-gdb@ add pointer fetch code to amd64 (2) >
+  set_gdbarch_fetch_pointer_argument (gdbarch, amd64_fetch_pointer_argument);
+// @mulle-gdb@ add pointer fetch code to amd64 (2) <
 
   /* Hook the function epilogue frame unwinder.  This unwinder is
      appended to the list first, so that it supersedes the other

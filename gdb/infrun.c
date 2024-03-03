@@ -4684,7 +4684,7 @@ adjust_pc_after_break (struct thread_info *thread,
      generates these signals at breakpoints (the code has been in GDB since at
      least 1992) so I can not guess how to handle them here.
 
-     In earlier versions of GDB, a target with 
+     In earlier versions of GDB, a target with
      gdbarch_have_nonsteppable_watchpoint would have the PC after hitting a
      watchpoint affected by gdbarch_decr_pc_after_break.  I haven't found any
      target with both of these set in GDB history, and it seems unlikely to be
@@ -4783,7 +4783,7 @@ adjust_pc_after_break (struct thread_info *thread,
 	 differentiate between the two, as the latter needs adjusting
 	 but the former does not.
 
-	 The SIGTRAP can be due to a completed hardware single-step only if 
+	 The SIGTRAP can be due to a completed hardware single-step only if
 	  - we didn't insert software single-step breakpoints
 	  - this thread is currently being stepped
 
@@ -6644,8 +6644,8 @@ handle_signal_stop (struct execution_control_state *ecs)
 	  /* The user issued a step when stopped at a breakpoint.
 	     Maybe we should stop, maybe we should not - the delay
 	     slot *might* correspond to a line of source.  In any
-	     case, don't decide that here, just set 
-	     ecs->stepping_over_breakpoint, making sure we 
+	     case, don't decide that here, just set
+	     ecs->stepping_over_breakpoint, making sure we
 	     single-step again before breakpoints are re-inserted.  */
 	  ecs->event_thread->stepping_over_breakpoint = 1;
 	}
@@ -7368,7 +7368,7 @@ process_event_stop_test (struct execution_control_state *ecs)
 	{
 	  /* Any solib trampoline code can be handled in reverse
 	     by simply continuing to single-step.  We have already
-	     executed the solib function (backwards), and a few 
+	     executed the solib function (backwards), and a few
 	     steps will take us back through the trampoline to the
 	     caller.  */
 	  keep_going (ecs);
@@ -7423,8 +7423,12 @@ process_event_stop_test (struct execution_control_state *ecs)
       if (real_stop_pc != 0)
 	ecs->stop_func_start = real_stop_pc;
 
-      if (real_stop_pc != 0 && in_solib_dynsym_resolve_code (real_stop_pc))
+   // @mulle-gdb@ hacque! >
+   //   if (real_stop_pc != 0) && in_solib_dynsym_resolve_code (real_stop_pc))
+      if (real_stop_pc != 0)
 	{
+      in_solib_dynsym_resolve_code (real_stop_pc); // ignore return value
+   // @mulle-gdb@ hacque! >
 	  symtab_and_line sr_sal;
 	  sr_sal.pc = ecs->stop_func_start;
 	  sr_sal.pspace = get_frame_program_space (frame);
@@ -7509,7 +7513,7 @@ process_event_stop_test (struct execution_control_state *ecs)
 	{
 	  /* Any solib trampoline code can be handled in reverse
 	     by simply continuing to single-step.  We have already
-	     executed the solib function (backwards), and a few 
+	     executed the solib function (backwards), and a few
 	     steps will take us back through the trampoline to the
 	     caller.  */
 	  keep_going (ecs);
@@ -7523,7 +7527,7 @@ process_event_stop_test (struct execution_control_state *ecs)
 	  symtab_and_line sr_sal;
 	  sr_sal.pc = ecs->stop_func_start;
 	  sr_sal.pspace = get_frame_program_space (frame);
-	  insert_step_resume_breakpoint_at_sal (gdbarch, 
+	  insert_step_resume_breakpoint_at_sal (gdbarch,
 						sr_sal, null_frame_id);
 	  keep_going (ecs);
 	  return;
@@ -7537,7 +7541,7 @@ process_event_stop_test (struct execution_control_state *ecs)
   stop_pc_sal = find_pc_line (ecs->event_thread->stop_pc (), 0);
 
   /* NOTE: tausq/2004-05-24: This if block used to be done before all
-     the trampoline processing logic, however, there are some trampolines 
+     the trampoline processing logic, however, there are some trampolines
      that have no names, so we should do trampoline handling first.  */
   if (ecs->event_thread->control.step_over_calls == STEP_OVER_UNDEBUGGABLE
       && ecs->stop_func_name == nullptr
@@ -8398,12 +8402,12 @@ check_exception_resume (struct execution_control_state *ecs,
 
       /* The exception breakpoint is a thread-specific breakpoint on
 	 the unwinder's debug hook, declared as:
-	 
+
 	 void _Unwind_DebugHook (void *cfa, void *handler);
-	 
+
 	 The CFA argument indicates the frame to which control is
 	 about to be transferred.  HANDLER is the destination PC.
-	 
+
 	 We ignore the CFA and set a temporary breakpoint at HANDLER.
 	 This is not extremely efficient but it avoids issues in gdb
 	 with computing the DWARF CFA, and it also works even in weird
@@ -10096,7 +10100,7 @@ By default, the debugger will use the same inferior."),
 			show_follow_exec_mode_string,
 			&setlist, &showlist);
 
-  add_setshow_enum_cmd ("scheduler-locking", class_run, 
+  add_setshow_enum_cmd ("scheduler-locking", class_run,
 			scheduler_enums, &scheduler_mode, _("\
 Set mode for locking scheduler during execution."), _("\
 Show mode for locking scheduler during execution."), _("\

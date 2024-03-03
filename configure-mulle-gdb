@@ -1,0 +1,68 @@
+#! /bin/sh
+
+# the target doesn't help as this is what's the default anyway
+# yet gdb uses i386 as the default
+
+# mpfr not there on darwin...
+
+flags=
+if [ "`uname -s`" = Linux ]
+then
+    flags="--with-gnu-ld"
+fi
+
+#
+# make distclean or maintainer-clean can't wipe the config.cache files
+# which keep the CFLAGS, so do it myself
+#
+find . -name config.cache -exec rm {} \;
+
+#CXXFLAGS='-g3 -O0' CFLAGS='-g3 -O0' \
+./configure \
+   --program-prefix="mulle-" \
+   --disable-binutils \
+   --disable-ld \
+   --disable-gold \
+   --disable-gas \
+   --disable-sim \
+   --disable-gprof \
+   --disable-libmcheck \
+   --enable-64-bit-bfd \
+   --with-separate-debug-dir="/usr/lib/debug" \
+   --with-system-gdbinit="/etc/gdb/gdbinit" \
+   --with-curses \
+   ${flags} \
+   --without-mpfr \
+   --without-expat \
+   --without-guile \
+   --without-lmza \
+   --without-intel-pt \
+   --without-python \
+   --without-tcl \
+   --without-tk \
+   --with-tui \
+   --without-libunwind-ia64 \
+   --without-x \
+   --without-babeltrace \
+   "$@"
+
+
+# ubuntu gdb config:
+#   configure --host=x86_64-linux-gnu --target=x86_64-linux-gnu
+#             --with-auto-load-dir=$debugdir:$datadir/auto-load
+#             --with-auto-load-safe-path=$debugdir:$datadir/auto-load
+#             --with-expat
+#             --with-gdb-datadir=/usr/share/gdb (relocatable)
+#             --with-jit-reader-dir=/usr/lib/gdb (relocatable)
+#             --without-libunwind-ia64
+#             --with-lzma
+#             --with-babeltrace
+#             --without-intel-pt
+#             --disable-libmcheck
+#             --with-mpfr
+#             --with-python=/usr (relocatable)
+#             --without-guile
+#             --disable-source-highlight
+#             --with-separate-debug-dir=/usr/lib/debug (relocatable)
+#             --with-system-gdbinit=/etc/gdb/gdbinit
+

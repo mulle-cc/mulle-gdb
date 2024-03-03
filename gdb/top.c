@@ -1324,14 +1324,18 @@ print_gdb_version (struct ui_file *stream, bool interactive)
      program to parse, and is just canonical program name and version
      number, which starts after last space.  */
 
-  std::string v_str = string_printf ("GNU gdb %s%s", PKGVERSION, version);
+  // @mulle-gdb@ copyright >
+  std::string v_str = string_printf ("mulle-gdb %s%s", PKGVERSION, version);
   gdb_printf (stream, "%ps\n",
-	      styled_string (version_style.style (), v_str.c_str ()));
+		    styled_string (version_style.style (), v_str.c_str ()));
 
   /* Second line is a copyright notice.  */
 
   gdb_printf (stream,
-	      "Copyright (C) 2023 Free Software Foundation, Inc.\n");
+		    "Copyright (C) 2020 Free Software Foundation, Inc.\n");
+  gdb_printf (stream,
+          "Copyright (C) 2021 Mulle kybernetiK.\n");
+  // @mulle-gdb@ copyright <
 
   /* Following the copyright is a brief statement that the program is
      free software, that users are free to copy and change it on
