@@ -2741,7 +2741,7 @@ amd64_gen_return_address (struct gdbarch *gdbarch,
 
 // @mulle-gdb@ add pointer fetch code to amd64 (1) >
 static CORE_ADDR
-amd64_fetch_pointer_argument (struct frame_info *frame, int argi,
+amd64_fetch_pointer_argument (frame_info_ptr frame, int argi,
               struct type *type)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);

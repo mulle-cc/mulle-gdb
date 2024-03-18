@@ -1249,7 +1249,6 @@ _initialize_objc_language ()
   add_com_alias ("po", print_object_cmd, class_vars, 1);
 }
 
-#endif // #ifdef __cplusplus
 
 #if DEBUG_VERBOSE
 static size_t  read_c_string(struct gdbarch *gdbarch, CORE_ADDR addr, char *buf, size_t n)
@@ -1371,16 +1370,24 @@ read_universe( void)
     return ( 0);
    }
 
-   universe = BMSYMBOL_VALUE_ADDRESS (universe_sym);
+   universe = universe_sym.value_address();
    return( universe);
 }
 
 
-static uint32_t
-read_runtime_version (struct gdbarch *gdbarch)
+struct runtime_version_loadbits
+{
+   uint32_t  version;
+   uint32_t  loadbits; // 0 for < 0.24
+};
+
+
+static struct runtime_version_loadbits
+read_runtime_version_loadbits(struct gdbarch *gdbarch)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   int   len;
+  struct runtime_version_loadbits   info = { 0 };
 
 #if DEBUG_VERBOSE
    fprintf( stderr, "%s\n", __PRETTY_FUNCTION__);
@@ -1389,7 +1396,7 @@ read_runtime_version (struct gdbarch *gdbarch)
 
    universe = read_universe();
    if( ! universe)
-      return( 0);
+      return( info);
 
    CORE_ADDR version_p;
    ULONGEST version;
@@ -1399,8 +1406,151 @@ read_runtime_version (struct gdbarch *gdbarch)
    version_p += len; // skip cache
 
    version = read_memory_unsigned_integer( version_p, len, byte_order);
-   return( (uint32_t) (uintptr_t) version);
+   info.version = (uint32_t) (uintptr_t) version;
+
+   if( info.version < 24)
+   {
+      CORE_ADDR loadbits_p;
+      ULONGEST loadbits;
+
+      loadbits_p = version_p + len; // skip cache
+      loadbits = read_memory_unsigned_integer( loadbits_p, len, byte_order);
+      info.loadbits = (uint32_t) (uintptr_t) loadbits;
+   }
+   return( info);
 }
+
+
+
+/* x86_64: magic offsets, address arithmetic in mulle_objc_classpair
+ * see: "mulle-objc-runtime/test-compiler-runtime/gdb"
+ *
+ * These offsets change for each release though. We need a way to get the
+ * current runtime version and then use the proper offsets. Or put the offsets
+ * into the universe! Alternative the classpair, contains these offsets...
+ *
+ * pair.infraclass      = 16
+ * pair.metaclass       = 480
+ * pair.protocolclasses = 800
+ * i686: magic offsets
+ * pair.infraclass      = 8
+ * pair.metaclass       = 248
+ * pair.protocolclasses = 412
+ */
+
+
+struct gdb_objc_runtime_offsets
+{
+   int infraclass;
+   int metaclass;
+   int protocolclasses;
+};
+
+struct gdb_objc_runtime_version_arch_offsets
+{
+   struct
+   {
+      int  major;
+      int  minor;
+   } version;
+   struct gdb_objc_runtime_offsets  b64;
+   struct gdb_objc_runtime_offsets  b32;
+};
+
+
+static struct gdb_objc_runtime_offsets *
+   get_version_arch_offsets( int major, int minor, int bits, int tao)
+{
+   static struct gdb_objc_runtime_version_arch_offsets  runtime_offsets[] =
+   {
+      { { 0, 18 }, { 16, 496, 840 }, { 8, 248, 420 } },
+      { { 0, 19 }, { 16, 496, 848 }, { 8, 248, 424 } },
+      { { 0, 20 }, { 16, 480, 800 }, { 8, 248, 412 } },
+      { { 0, 24 }, { 16, 480, 792 }, { 8, 248, 412 } }
+   };
+#define n_runtime_offsets (sizeof( runtime_offsets) / sizeof( runtime_offsets[ 0]))
+
+   static struct gdb_objc_runtime_version_arch_offsets  tao_runtime_offsets[] =
+   {
+      { { 0, 24 }, { 32, 512, 824 }, { 16, 272, 436 } }
+   };
+#define n_tao_runtime_offsets (sizeof( tao_runtime_offsets) / sizeof( tao_runtime_offsets[ 0]))
+
+   int   i;
+   int   n;
+   struct gdb_objc_runtime_version_arch_offsets  *p;
+
+   if( tao)
+   {
+      n = n_tao_runtime_offsets;
+      p = tao_runtime_offsets;
+   }
+   else
+   {
+      n = n_runtime_offsets;
+      p = runtime_offsets;
+   }
+
+
+   for( i = 0; i < n; i++)
+   {
+      if( p->version.major == major && p->version.minor == minor)
+      {
+         switch( bits)
+         {
+         case 64 : return( &runtime_offsets[ i].b64);
+         case 32 : return( &runtime_offsets[ i].b32);
+         }
+         break;
+      }
+      ++p;
+   }
+   return( NULL);
+}
+
+static struct  runtime_version_loadbits  runtime_version_loadbits_info;
+
+static uint32_t  mulle_objc_runtime_version( struct gdbarch *gdbarch)
+{
+   if( ! runtime_version_loadbits_info.version)
+      runtime_version_loadbits_info = read_runtime_version_loadbits( gdbarch);
+   return( runtime_version_loadbits_info.version);
+}
+
+
+static uint32_t  mulle_objc_runtime_loadbits( struct gdbarch *gdbarch)
+{
+   if( ! runtime_version_loadbits_info.version)
+      runtime_version_loadbits_info = read_runtime_version_loadbits( gdbarch);
+   return( runtime_version_loadbits_info.loadbits);
+}
+
+
+static int  mulle_objc_runtime_tao( struct gdbarch *gdbarch)
+{
+   uint32_t   loadbits;
+
+   loadbits = mulle_objc_runtime_loadbits( gdbarch);
+   return( (loadbits & 0x10) ? 1 :0 );
+}
+
+
+
+static struct gdb_objc_runtime_offsets  *
+   gdb_runtime_offset_arch( struct gdbarch *gdbarch, int bits)
+{
+   uint32_t   version;
+   uint32_t   major, minor;
+   uint32_t   tao;
+
+   version = mulle_objc_runtime_version( gdbarch);
+   major   = (version >> 20);
+   minor   = (version >> 8) & (1024-1);
+   tao     = mulle_objc_runtime_tao( gdbarch);
+   return( get_version_arch_offsets( major, minor, bits, tao));
+}
+
+
 
 
 static void
@@ -1437,9 +1587,11 @@ read_objc_object (struct gdbarch *gdbarch, CORE_ADDR addr,
 
    // fprintf( stderr, "%s :: universe=%p\n", __PRETTY_FUNCTION__, (void *) universe);
    // now get to TPS table
-   tpsTable = universe;
+   tpsTable  = universe;
    tpsTable += len;     // skip cache
    tpsTable += 2 * len; // skip version + path
+   if( mulle_objc_runtime_tao( gdbarch)) // skip loadbits
+      tpsTable += len;
 
    tpsTable += 6 * (3 * len); // skip 6 hashmaps
    tpsTable += 3 * (3 * len); // skip 3 pointerarrays
@@ -1652,6 +1804,7 @@ enum
    MULLE_OBJC_CLASS_DONT_INHERIT_PROTOCOLS           = 0x04,
    MULLE_OBJC_CLASS_DONT_INHERIT_PROTOCOL_CATEGORIES = 0x08,
    MULLE_OBJC_CLASS_DONT_INHERIT_PROTOCOL_META       = 0x10,
+   MULLE_OBJC_CLASS_DONT_INHERIT_CLASS               = 0x20
 };
 
 static unsigned long
@@ -1682,90 +1835,6 @@ read_objc_pointerarray_entry(struct gdbarch *gdbarch,
   len = gdbarch_ptr_bit( gdbarch) / 8;
   addr += len * 2;  // entrie
   return read_memory_unsigned_integer( addr + (num * len), len, byte_order);
-}
-
-/* x86_64: magic offsets, address arithmetic in mulle_objc_classpair
- * see: "mulle-objc-runtime/test-compiler-runtime/gdb"
- *
- * These offsets change for each release though. We need a way to get the
- * current runtime version and then use the proper offsets. Or put the offsets
- * into the universe! Alternative the classpair, contains these offsets...
- *
- * pair.infraclass      = 16
- * pair.metaclass       = 480
- * pair.protocolclasses = 800
- * i686: magic offsets
- * pair.infraclass      = 8
- * pair.metaclass       = 248
- * pair.protocolclasses = 412
- */
-
-
-struct gdb_objc_runtime_offsets
-{
-   int infraclass;
-   int metaclass;
-   int protocolclasses;
-};
-
-struct gdb_objc_runtime_version_arch_offsets
-{
-   struct
-   {
-      int  major;
-      int  minor;
-   } version;
-   struct gdb_objc_runtime_offsets  b64;
-   struct gdb_objc_runtime_offsets  b32;
-};
-
-
-static struct gdb_objc_runtime_offsets *
-   get_version_arch_offsets( int major, int minor, int bits)
-{
-   static struct gdb_objc_runtime_version_arch_offsets  runtime_offsets[] =
-   {
-      { { 0, 18 }, { 16, 496, 840 }, { 8, 248, 420 } },
-      { { 0, 19 }, { 16, 496, 848 }, { 8, 248, 424 } },
-      { { 0, 20 }, { 16, 480, 800 }, { 8, 248, 412 } }
-   };
-#define n_runtime_offsets (sizeof( runtime_offsets) / sizeof( runtime_offsets[ 0]))
-
-   int   i;
-
-   for( i = 0; i < n_runtime_offsets; i++)
-      if( runtime_offsets[ i].version.major == major && runtime_offsets[ i].version.minor == minor)
-      {
-         switch( bits)
-         {
-         case 64 : return( &runtime_offsets[ i].b64);
-         case 32 : return( &runtime_offsets[ i].b32);
-         }
-         break;
-      }
-   return( NULL);
-}
-
-
-static uint32_t  mulle_objc_runtime_version( struct gdbarch *gdbarch)
-{
-   static uint32_t   version;
-   if( ! version)
-      version = read_runtime_version( gdbarch);
-   return( version);
-}
-
-
-static struct gdb_objc_runtime_offsets  *
-   gdb_runtime_offset_arch( struct gdbarch *gdbarch, int bits)
-{
-   uint32_t   version;
-   uint32_t   major, minor;
-
-   version = mulle_objc_runtime_version( gdbarch);
-   major   = (version >> 20);
-   minor   = (version >> 8) & (1024-1);
-   return( get_version_arch_offsets( major, minor, bits));
 }
 
 
@@ -1972,6 +2041,9 @@ find_implementation_in_methodlist_array(struct gdbarch *gdbarch,
    while( mlistnum)
    {
      --mlistnum;
+     if( (inheritance & MULLE_OBJC_CLASS_DONT_INHERIT_CLASS) && mlistnum == 0)
+        break;
+
      mlist = read_objc_pointerarray_entry( gdbarch, methodlist_array, mlistnum);
 #if DEBUG_VERBOSE
      fprintf( stderr, "%s :: mlist=%p\n", __PRETTY_FUNCTION__, (void *) mlist);
@@ -1979,7 +2051,7 @@ find_implementation_in_methodlist_array(struct gdbarch *gdbarch,
      if (mlist == 0)
        break;
 
-     found  = find_implementation_in_methodlist( gdbarch, mlist, sel);
+     found = find_implementation_in_methodlist( gdbarch, mlist, sel);
      if( found)
         return( found);
    }
@@ -2293,30 +2365,37 @@ static struct objc_methcall methcalls[] = {
 // TODO: mulle_objc_object_call is found like this only I don't know why
   { "mulle_objc_object_call", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_inline_full", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call_inline", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call_inline_minimal", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call_inline_partial", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call2", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call_variablemethodid", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call_variablemethodid_inline", resolve_msgsend, 0, 0},
+  { "mulle_objc_object_call_variablemethodid_inline_full", resolve_msgsend, 0, 0},
   { "mulle_objc_object_call_class", resolve_msgsend_class, 0, 0},
   { "mulle_objc_object_call_class_needcache", resolve_msgsend_class, 0, 0},
   { "mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
+  { "mulle_objc_object_supercall2", resolve_msgsend_super, 0, 0},
+  { "mulle_objc_object_supercall_inline_full", resolve_msgsend_super, 0, 0},
   { "mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
   { "mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
   { "mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 },
 
   { "_mulle_objc_object_call", resolve_msgsend, 0, 0},
   { "__mulle_objc_object_call", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_inline_full", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_inline", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_inline_minimal", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_inline_partial", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call2", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_variablemethodid", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_variablemethodid_inline", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_call_variablemethodid_inline_full", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_class", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_call_class_needcache", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_supercall_inline_full", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 }
@@ -2565,7 +2644,8 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
   classTable  = universe;
   classTable += len; // skip cache
   classTable += 2 * len; // skip version + path
-
+  if( mulle_objc_runtime_tao( gdbarch)) // skip loadbits
+   classTable += len;
   superTable  = classTable;
   superTable += 4 * (3 * len); // skip 4 hashmaps
 

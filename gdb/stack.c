@@ -1317,9 +1317,9 @@ static int   mulle_is_boring_functionname( char *s)
   return( ! strncmp( "mulle_objc_", s, 11));
 }
 
-int   mulle_is_boring_frame( frame_info *frame, int level);
+int   mulle_is_boring_frame( frame_info_ptr frame, int level);
 
-int   mulle_is_boring_frame( frame_info *frame, int level)
+int   mulle_is_boring_frame( frame_info_ptr frame, int level)
 {
   enum language funlang = language_unknown;
   struct symbol *func;

@@ -26,13 +26,13 @@ find . -name config.cache -exec rm {} \;
    --disable-gas \
    --disable-sim \
    --disable-gprof \
+   --disable-gprofng \
    --disable-libmcheck \
    --enable-64-bit-bfd \
    --with-separate-debug-dir="/usr/lib/debug" \
    --with-system-gdbinit="/etc/gdb/gdbinit" \
    --with-curses \
    ${flags} \
-   --without-mpfr \
    --without-expat \
    --without-guile \
    --without-lmza \
