@@ -2,12 +2,12 @@
 
 ##### 🦗 gdb debugger for mulle-objc
 
-This is the release version of [gdb](//sourceware.org/gdb/) 11.1 adapted to
+This is the release version of [gdb](//sourceware.org/gdb/) 16.3 adapted to
 work with [mulle-objc](//mulle-objc.github.io). Currently only x86_64 is
 known to work.
 
 The version tracks that of gdb, but extends it to 4 parts, where the last
-digit is the mulle version. (e.g. 11.1 > 11.1.0.1)
+digit is the mulle version. (e.g. 16.3 > 16.3.0.0)
 
 Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.20.
 
@@ -31,17 +31,17 @@ manually.
 
 ### Manual installation
 
-Prerequisite    | Comment
-----------------|------------
-autoconf        |
-texinfo         |
-flex            |
-bison           |
-build-essential | c++, make etc.
+| Prerequisite    | Comment
+| ----------------|------------
+| autoconf        |
+| texinfo         |
+| flex            |
+| bison           |
+| build-essential | c++, make etc.
 
 
 ``` bash
-MULLE_GDB_VERSION=11.1.0.1
+MULLE_GDB_VERSION=16.3.0.0
 ./configure-mulle-gdb --prefix "/opt/mulle-gdb/${MULLE_GDB_VERSION}"
 make -j 8
 sudo make install
