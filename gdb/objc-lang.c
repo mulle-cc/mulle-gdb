@@ -2394,10 +2394,26 @@ static struct objc_methcall methcalls[] = {
   { "_mulle_objc_object_call_variablemethodid_inline_full", resolve_msgsend, 0, 0},
   { "_mulle_objc_object_call_class", resolve_msgsend_class, 0, 0},
   { "_mulle_objc_object_call_class_needcache", resolve_msgsend_class, 0, 0},
+
+  { "_mulle_objc_object_callback_class", resolve_msgsend_class, 0, 0},
+  { "_mulle_objc_object_callback_cache_miss", resolve_msgsend, 0, 0},
+  { "_mulle_objc_object_callback_cache_collision", resolve_msgsend, 0, 0},
+
+  { "_mulle_objc_object_callback_super", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_callback_super_cache_collision", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_callback_super_cache_miss", resolve_msgsend_super, 0, 0},
+
+  { "_mulle_objc_object_call_super", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_call_super_inline_full", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_call_super_inline", resolve_msgsend_super, 0, 0},
+  { "_mulle_objc_object_call_super_inline_partial", resolve_msgsend_super, 0, 0},
+
+  { "_mulle_objc_object_super", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_object_supercall", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_object_supercall_inline_full", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_object_supercall_inline", resolve_msgsend_super, 0, 0},
   { "_mulle_objc_object_supercall_inline_partial", resolve_msgsend_super, 0, 0},
+
   { "_mulle_objc_global_lookup_infraclass_nofail", NULL, 0, 0 }
 //  { "_objc_getMetaClass", NULL, 0, 0}
 };

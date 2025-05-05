@@ -35,7 +35,7 @@ find . -name config.cache -exec rm {} \;
    ${flags} \
    --without-expat \
    --without-guile \
-   --without-lmza \
+   --without-lzma \
    --without-intel-pt \
    --without-python \
    --without-tcl \
