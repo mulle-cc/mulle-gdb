@@ -142,14 +142,16 @@ migrate()
 
 cleanup()
 {
+   echo "### 10: Examine changes" >&2
+
    # count our change marker texts again
    grep -R '@mulle-' ${SOURCEDIRS} > "${AFTERFILE}" || exit 1
 
    local before
    local after
 
-   before="`wc -l "${BEFOREFILE}" | awk 'print $1'`" || exit 1
-   after="`wc -l "${AFTERFILE}" | awk 'print $1' `"  || exit 1
+   before="`wc -l "${BEFOREFILE}" | awk '{print $1}'`"   || exit 1
+   after="`wc -l "${AFTERFILE}"   | awk '{print $1}' `"  || exit 1
 
    if [ "${before}" -gt "${after}" ]
    then
@@ -164,7 +166,7 @@ cleanup()
    # resolve conflicts manually.
    # Check with grep '@mulle-objc' ... | wc -l, that all changes are present
    #
-   echo "### 10: Tmp branch delete" >&2
+   echo "### 11: Tmp branch delete" >&2
 
    git branch -D "tmp_${NEW_MULLE_DEV_BRANCH}" || exit 1
    rm "${AFTERFILE}" "${BEFOREFILE}"
