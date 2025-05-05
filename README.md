@@ -9,7 +9,7 @@ known to work.
 The version tracks that of gdb, but extends it to 4 parts, where the last
 digit is the mulle version. (e.g. 16.3 > 16.3.0.0)
 
-Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.20.
+Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.26.
 
 ## Source
 
