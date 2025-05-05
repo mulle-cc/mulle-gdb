@@ -579,6 +579,14 @@ skip_tailcall_frames (const frame_info_ptr &initial_frame)
 	break;
     }
 
+  // @mulle-gdb@ ignore boring frames >
+  {
+      extern int   mulle_is_boring_frame( frame_info_ptr frame, int level);
+
+      while( frame && mulle_is_boring_frame(frame, -1))
+        frame = get_prev_frame (frame);
+  }
+  // @mulle-gdb@ ignore boring frames <
   return frame;
 }
 
@@ -2670,6 +2678,16 @@ get_prev_frame (const frame_info_ptr &this_frame)
      something should be calling get_selected_frame() or
      get_current_frame().  */
   gdb_assert (this_frame != NULL);
+
+  /* If this_frame is the current frame, then compute and stash
+     its frame id prior to fetching and computing the frame id of the
+     previous frame.  Otherwise, the cycle detection code in
+     get_prev_frame_if_no_cycle() will not work correctly.  When
+     get_frame_id() is called later on, an assertion error will
+     be triggered in the event of a cycle between the current
+     frame and its previous frame.  */
+  if (this_frame->level == 0)
+    get_frame_id (this_frame);
 
   frame_pc_p = get_frame_pc_if_available (this_frame, &frame_pc);
 
