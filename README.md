@@ -9,7 +9,11 @@ known to work.
 The version tracks that of gdb, but extends it to 4 parts, where the last
 digit is the mulle version. (e.g. 16.3 > 16.3.0.0)
 
-Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.26.
+Debugs code linked with [mulle-objc-runtime](//github.com/mulle-objc/mulle-objc-runtime) 0.27.
+
+Read [mulle-objc-runtime-canary.md](mulle-objc-runtime-canary.md) for tips
+about synching the debugger runtime structures up with the runtime.
+
 
 ## Source
 
@@ -41,7 +45,7 @@ manually.
 
 
 ``` bash
-MULLE_GDB_VERSION=16.3.0.0
+MULLE_GDB_VERSION=16.3.0.1
 ./configure-mulle-gdb --prefix "/opt/mulle-gdb/${MULLE_GDB_VERSION}"
 make -j 8
 sudo make install

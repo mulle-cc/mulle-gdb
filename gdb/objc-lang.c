@@ -1267,7 +1267,7 @@ static size_t  read_c_string(struct gdbarch *gdbarch, CORE_ADDR addr, char *buf,
    gdb_byte   c;
 
    if( ! n)
-      return;
+      return 0;
 
    if( ! addr)
    {
@@ -1275,7 +1275,7 @@ static size_t  read_c_string(struct gdbarch *gdbarch, CORE_ADDR addr, char *buf,
          strcpy( buf, "NULL");
       else
          buf[ 0] = 0;
-      return;
+      return 0;
    }
 
    p        = buf;
@@ -1417,15 +1417,13 @@ read_runtime_version_loadbits(struct gdbarch *gdbarch)
    version = read_memory_unsigned_integer( version_p, len, byte_order);
    info.version = (uint32_t) (uintptr_t) version;
 
-   if( info.version < 24)
-   {
-      CORE_ADDR loadbits_p;
-      ULONGEST loadbits;
+   CORE_ADDR loadbits_p;
+   ULONGEST loadbits;
 
-      loadbits_p = version_p + len; // skip cache
-      loadbits = read_memory_unsigned_integer( loadbits_p, len, byte_order);
-      info.loadbits = (uint32_t) (uintptr_t) loadbits;
-   }
+   loadbits_p = version_p + len; // skip version
+   loadbits = read_memory_unsigned_integer( loadbits_p, len, byte_order);
+   info.loadbits = (uint32_t) (uintptr_t) loadbits;
+
    return( info);
 }
 
@@ -1475,13 +1473,16 @@ static struct gdb_objc_runtime_offsets *
       { { 0, 18 }, { 16, 496, 840 }, { 8, 248, 420 } },
       { { 0, 19 }, { 16, 496, 848 }, { 8, 248, 424 } },
       { { 0, 20 }, { 16, 480, 800 }, { 8, 248, 412 } },
-      { { 0, 24 }, { 16, 480, 792 }, { 8, 248, 412 } }
+      { { 0, 24 }, { 16, 480, 792 }, { 8, 248, 412 } },
+      { { 0, 27 }, { 16, 480, 800 }, { 8, 248, 412 } }
    };
 #define n_runtime_offsets (sizeof( runtime_offsets) / sizeof( runtime_offsets[ 0]))
 
    static struct gdb_objc_runtime_version_arch_offsets  tao_runtime_offsets[] =
    {
-      { { 0, 24 }, { 32, 512, 824 }, { 16, 272, 436 } }
+      { { 0, 20 }, { 32, 512, 832 }, { 16, 272, 440 } },
+      { { 0, 24 }, { 32, 512, 824 }, { 16, 272, 436 } },
+      { { 0, 27 }, { 32, 512, 832 }, { 16, 272, 440 } }
    };
 #define n_tao_runtime_offsets (sizeof( tao_runtime_offsets) / sizeof( tao_runtime_offsets[ 0]))
 
@@ -1507,8 +1508,8 @@ static struct gdb_objc_runtime_offsets *
       {
          switch( bits)
          {
-         case 64 : return( &runtime_offsets[ i].b64);
-         case 32 : return( &runtime_offsets[ i].b32);
+         case 64 : return( &p->b64);
+         case 32 : return( &p->b32);
          }
          break;
       }
@@ -1540,6 +1541,9 @@ static int  mulle_objc_runtime_tao( struct gdbarch *gdbarch)
    uint32_t   loadbits;
 
    loadbits = mulle_objc_runtime_loadbits( gdbarch);
+#if DEBUG_VERBOSE
+   fprintf( stderr, "%s :: loadbits=0x%x, tao=%d\n", __PRETTY_FUNCTION__, loadbits, (loadbits & 0x10) ? 1 : 0);
+#endif
    return( (loadbits & 0x10) ? 1 :0 );
 }
 
@@ -1556,6 +1560,9 @@ static struct gdb_objc_runtime_offsets  *
    major   = (version >> 20);
    minor   = (version >> 8) & (1024-1);
    tao     = mulle_objc_runtime_tao( gdbarch);
+#if DEBUG_VERBOSE
+   fprintf( stderr, "%s :: version=%d.%d, bits=%d, tao=%d\n", __PRETTY_FUNCTION__, major, minor, bits, tao);
+#endif
    return( get_version_arch_offsets( major, minor, bits, tao));
 }
 
@@ -1795,8 +1802,8 @@ read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
 #endif
 
 
-  theclass->allocation_size = read_memory_unsigned_integer( addr, len, byte_order);
-  addr += len;
+  theclass->allocation_size = read_memory_unsigned_integer( addr, 8, byte_order);
+  addr += 8;
 
   theclass->infra_class = read_memory_unsigned_integer( addr, len, byte_order);
   addr += len;
@@ -1830,7 +1837,8 @@ read_objc_class (struct gdbarch *gdbarch, CORE_ADDR addr,
       theclass->allocation_size < 0)
   {
 #if DEBUG_VERBOSE
-     fprintf( stderr, "%s :: class looks broken", __PRETTY_FUNCTION__);
+     fprintf( stderr, "%s :: class looks broken (inheritance=%ld, classid=%p, allocation_size=%ld)\n", 
+              __PRETTY_FUNCTION__, theclass->inheritance, (void*)theclass->classid, theclass->allocation_size);
 #endif
 
       memset( theclass, 0, sizeof( *theclass));
@@ -1924,6 +1932,11 @@ protocolclass_array_of_metaclass( struct gdbarch *gdbarch,
      return( 0);
 
   len  = bits / 8;
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: metaAddr=%p, offsets: proto=%d meta=%d, reading at %p\n", 
+           __PRETTY_FUNCTION__, (void*)metaAddr, offsets->protocolclasses, offsets->metaclass,
+           (void*)(metaAddr + offsets->protocolclasses - offsets->metaclass));
+#endif
   return( read_memory_unsigned_integer( metaAddr +
             offsets->protocolclasses -
             offsets->metaclass, len, byte_order));
@@ -2678,47 +2691,23 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
   struct type *ptr_type = builtin_type (gdbarch)->builtin_data_ptr;
   struct objc_super  ssup;
 
-  CORE_ADDR superid;
+  CORE_ADDR superid = 0;
   
-  /* Get the function name for debug output */
-  const char *func_name = "<unknown>";
-  struct symbol *func_sym = find_pc_function (pc);
-  if (func_sym)
-    func_name = func_sym->linkage_name ();
-
-  if (info_verbose)
-    gdb_printf ("Resolving super call at %s (pc=%s)\n",
-                func_name, paddress (gdbarch, pc));
-
-  // super is a little tricky, we need to lookup the class via
-  // the universe...
-
-//  object  = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
-//  sel     = gdbarch_fetch_pointer_argument (gdbarch, frame, 1, ptr_type);
+  try
+    {
+      superid = gdbarch_fetch_pointer_argument (gdbarch, frame, 3, ptr_type);
+    }
+  catch (const gdb_exception &ex)
+    {
 #if DEBUG_VERBOSE
-  fprintf( stderr, "%s :: %p (%p)\n", __PRETTY_FUNCTION__, (void *) pc, frame);
+      fprintf( stderr, "%s :: failed to fetch superid: %s\n", __PRETTY_FUNCTION__, ex.what());
 #endif
+      return 0;
+    }
 
-  superid = gdbarch_fetch_pointer_argument (gdbarch, frame, 3, ptr_type);
 #if DEBUG_VERBOSE
   fprintf( stderr, "%s :: superid=%p\n", __PRETTY_FUNCTION__, (void *) superid);
 #endif
-  
-  if (info_verbose)
-    {
-      gdb_printf ("  Reading superid from arg 3: %s\n", paddress (gdbarch, superid));
-      
-      if (superid == 0)
-	gdb_printf ("  Warning: superid is 0 (uninitialized/invalid)\n");
-      
-      /* Also try reading other args to see what we're getting */
-      CORE_ADDR arg0 = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
-      CORE_ADDR arg1 = gdbarch_fetch_pointer_argument (gdbarch, frame, 1, ptr_type);
-      CORE_ADDR arg2 = gdbarch_fetch_pointer_argument (gdbarch, frame, 2, ptr_type);
-      gdb_printf ("  arg0 (obj): %s\n", paddress (gdbarch, arg0));
-      gdb_printf ("  arg1 (methodid): %s\n", paddress (gdbarch, arg1));
-      gdb_printf ("  arg2 (parameter): %s\n", paddress (gdbarch, arg2));
-    }
   
   if (!superid)
     return 0;
@@ -2729,155 +2718,113 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
 
   universe = read_universe ();
   if (!universe)
-    {
-      if (info_verbose)
-	gdb_printf ("  Failed: Universe not initialized\n");
-      return 0;
-    }
-
-  if (info_verbose)
-    gdb_printf ("  Universe found at %s\n", paddress (gdbarch, universe));
+    return 0;
 
   int   len;
+  enum bfd_endian byte_order;
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
+  byte_order = gdbarch_byte_order(gdbarch);
 
-  //    _mulle_concurrent_hashmap_lookup
 #if DEBUG_VERBOSE
-  fprintf( stderr, "%s :: universe=%p\n", __PRETTY_FUNCTION__, (void *) universe);
+  fprintf( stderr, "%s :: universe=%p, len=%d\n", __PRETTY_FUNCTION__, (void *) universe, len);
 #endif
-  // Universe layout: cachepivot(8) + version(8) + loadbits(8) + path(8) = 32 bytes
-  // Then: classtable, descriptortable, varyingtypedescriptortable, protocoltable, categorytable, supertable
+  
+  // Universe structure layout:
+  // cachepivot, version, loadbits, path, classtable, descriptortable, 
+  // varyingtypedescriptortable, protocoltable, categorytable, supertable
+  
   classTable  = universe;
-  classTable += 4 * len; // skip cachepivot + version + loadbits + path
-  superTable  = classTable;
-  superTable += 5 * (3 * len); // skip 5 hashmaps to get to supertable
+  classTable += len; // skip cachepivot
+  classTable += 3 * len; // skip version, loadbits, path
+  
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: classTable=%p\n", __PRETTY_FUNCTION__, (void *) classTable);
+#endif
 
-  if (info_verbose)
-    gdb_printf ("  Super table at %s\n", paddress (gdbarch, superTable));
+  superTable  = classTable;
+  superTable += 5 * (3 * len); // skip 5 hashmaps (descriptor, varyingtype, protocol, category)
+  
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: superTable=%p\n", __PRETTY_FUNCTION__, (void *) superTable);
+#endif
 
   CORE_ADDR superInfo;
 
   superInfo = search_hashtable (gdbarch, superTable, superid);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: superInfo=%p for superid=%p\n", __PRETTY_FUNCTION__, (void *) superInfo, (void *) superid);
+#endif
   if (!superInfo)
-    {
-      if (info_verbose)
-	{
-	  gdb_printf ("  Super call resolution FAILED for superid %s\n",
-		      paddress (gdbarch, superid));
-	  gdb_printf ("  Possible causes:\n");
-	  gdb_printf ("    - Superid not registered in super table\n");
-	  gdb_printf ("    - Super struct for class has been unloaded\n");
-	}
-      return 0;
-    }
-
-  if (info_verbose)
-    gdb_printf ("  Found super info at %s\n", paddress (gdbarch, superInfo));
+    return 0;
 
   read_objc_super (gdbarch, superInfo, &ssup);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: ssup.classid=%p, ssup.methodid=%p\n", __PRETTY_FUNCTION__, (void *) ssup.classid, (void *) ssup.methodid);
+#endif
   if (ssup.classid == 0 || ssup.methodid == 0)
+    return 0;
+
+  CORE_ADDR classAddr;
+
+  classAddr = search_hashtable( gdbarch, classTable, ssup.classid);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: classAddr=%p for classid=%p\n", __PRETTY_FUNCTION__, (void *) classAddr, (void *) ssup.classid);
+#endif
+  if( ! classAddr)
+     return( 0);
+
+  // Get obj (arg 0) - this is the actual class to search from
+  // For instance methods, obj is an instance, and we get its ISA
+  // For class methods, obj is the infraclass, and we get its ISA (the metaclass)
+  CORE_ADDR obj = 0;
+  try
     {
-      if (info_verbose)
-	gdb_printf ("  Warning: Invalid super struct (classid=%s, methodid=%s)\n",
-		    paddress (gdbarch, ssup.classid),
-		    paddress (gdbarch, ssup.methodid));
+      obj = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: fetched obj=%p\n", __PRETTY_FUNCTION__, (void *) obj);
+#endif
+    }
+  catch (const gdb_exception &ex)
+    {
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: failed to fetch obj\n", __PRETTY_FUNCTION__);
+#endif
       return 0;
     }
 
-  if (info_verbose)
-    gdb_printf ("  Super struct: classid=0x%x, methodid=0x%x\n",
-                (unsigned int)ssup.classid,
-                (unsigned int)ssup.methodid);
+  if( ! obj)
+     return( 0);
 
-  /* Get the object's class (ISA) - works for both infraclass and metaclass */
-  CORE_ADDR obj_addr = gdbarch_fetch_pointer_argument (gdbarch, frame, 0, ptr_type);
-  if (!obj_addr)
-    {
-      if (info_verbose)
-	gdb_printf ("  Failed: object pointer is NULL\n");
-      return 0;
-    }
+  // Get the ISA of obj - this is the class to start searching from
+  // With TAO: header is 4*ptr before obj, ISA at header[3]
+  // Without TAO: header is 2*ptr before obj, ISA at header[1]
+  // Simplified: ISA is always 1*ptr before obj
+  int tao = mulle_objc_runtime_tao(gdbarch);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: tao=%d\n", __PRETTY_FUNCTION__, tao);
+#endif
   
-  struct objc_object obj;
-  read_objc_object (gdbarch, obj_addr, &obj);
+  CORE_ADDR isa_addr = obj - len;
+  CORE_ADDR search_class = read_memory_unsigned_integer(isa_addr, len, byte_order);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: obj=%p, isa_addr=%p, search_class=%p\n", __PRETTY_FUNCTION__, (void *) obj, (void *) isa_addr, (void *) search_class);
+#endif
   
-  if (!obj.isa)
-    {
-      if (info_verbose)
-	gdb_printf ("  Failed: object ISA is NULL\n");
-      return 0;
-    }
-  
-  if (info_verbose)
-    gdb_printf ("  Object's class (ISA): %s\n", paddress (gdbarch, obj.isa));
-  
-  /* Walk up class hierarchy to find the class matching ssup.classid */
-  CORE_ADDR current_class = obj.isa;
-  struct objc_class cls;
-  int found_class = 0;
-  
-  while (current_class)
-    {
-      read_objc_class (gdbarch, current_class, &cls);
-      
-      if (info_verbose)
-	gdb_printf ("  Checking class at %s, classid=0x%x\n",
-		    paddress (gdbarch, current_class),
-		    (unsigned int)cls.classid);
-      
-      if (cls.classid == ssup.classid)
-	{
-	  found_class = 1;
-	  if (info_verbose)
-	    gdb_printf ("  Found matching class! Now searching from its superclass\n");
-	  break;
-	}
-      
-      current_class = cls.super_class;
-    }
-  
-  if (!found_class)
-    {
-      if (info_verbose)
-	gdb_printf ("  Warning: Could not find class with classid 0x%x in hierarchy\n",
-		    (unsigned int)ssup.classid);
-      return 1;
-    }
-  
-  /* Now search starting from the superclass */
-  if (!cls.super_class)
-    {
-      if (info_verbose)
-	gdb_printf ("  Warning: Class has no superclass\n");
-      return 1;
-    }
-  
-  if (info_verbose)
-    gdb_printf ("  Searching for method 0x%x starting from superclass at %s\n",
-		(unsigned int)ssup.methodid,
-		paddress (gdbarch, cls.super_class));
+  if (!search_class)
+    return 0;
 
   CORE_ADDR res;
 
-  /* Pass startClassid=0 since we already positioned at the right class */
-  res = find_implementation_from_class (gdbarch, cls.super_class, ssup.methodid, -1, 0);
-  
+  res = find_implementation_from_class( gdbarch, search_class, ssup.methodid, -1, ssup.classid);
+#if DEBUG_VERBOSE
+  fprintf( stderr, "%s :: res=%p\n", __PRETTY_FUNCTION__, (void *) res);
+#endif
   if (new_pc != 0)
     *new_pc = res;
-  
   if (res == 0)
-    {
-      if (info_verbose)
-        gdb_printf ("  Warning: Failed to find method implementation\n");
-      return 1;
-    }
-
-  if (info_verbose)
-    gdb_printf ("  Resolved to implementation: %s\n",
-                paddress (gdbarch, res));
-
-  return 0;
+    return 1;  // Not found - return non-zero
+  return 0;    // Found - return 0
 }
 
 
