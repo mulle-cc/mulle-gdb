@@ -2,10 +2,10 @@ class MulleGdb < Formula
   desc "mulle-gdb, the mulle-objc debugger based on gdb"
   homepage "https://github.com/mulle-cc/mulle-gdb"
   license "GPL-3.0-or-later"
-  version "11.1.0.1"
+  version "16.3.0.1"
 
-  url "https://github.com/mulle-cc/mulle-gdb/archive/refs/tags/11.1.0.1.tar.gz"
-  sha256 "7499b14bc2b18f8499f77bdf28b2bc03df36aaa99bdc04d6d306d84674d7f05d"
+  url "https://github.com/mulle-cc/mulle-gdb/archive/refs/tags/16.3.0.1.tar.gz"
+  sha256 "49c4b651da3ffddb809dd66c6ca086ee7e102f532312e8069f13ebcfab53fc3a"
 
   #
   # MEMO: For each macOS version, build bottles with:
@@ -15,15 +15,15 @@ class MulleGdb < Formula
   #   brew tap-new mulle-objc/software   # if not already tapped
   #   cp mulle-gdb.rb $(brew --repository mulle-objc/software)/Formula/mulle-gdb.rb
   #   brew bottle mulle-objc/software/mulle-gdb
-  #   # rename: mulle-gdb--11.1.0.1.arm64_sequoia.bottle.tar.gz
-  #   #      -> mulle-gdb-11.1.0.1.arm64_sequoia.bottle.tar.gz
-  #   gh release upload 11.1.0.1 mulle-gdb-11.1.0.1.*.bottle.tar.gz \
+  #   # rename: mulle-gdb--16.3.0.1.arm64_sequoia.bottle.tar.gz
+  #   #      -> mulle-gdb-16.3.0.1.arm64_sequoia.bottle.tar.gz
+  #   gh release upload 16.3.0.1 mulle-gdb-16.3.0.1.*.bottle.tar.gz \
   #      --repo mulle-cc/mulle-gdb
   #
   # Then update the bottle do block below with the sha256 output.
   #
   # bottle do
-  #   root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/11.1.0.1/"
+  #   root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/16.3.0.1/"
   #   sha256 cellar: :any_skip_relocation, arm64_sequoia: "..."
   # end
 
@@ -44,8 +44,8 @@ class MulleGdb < Formula
 
     mkdir "build" do
       system "../configure-mulle-gdb", "--prefix=#{prefix}"
-      system "make", "-j#{ENV.make_jobs}", "MAKEINFO=true", "WERROR_CFLAGS="
-      system "make", "install-gdb", "MAKEINFO=true"
+      system "make", "-j#{ENV.make_jobs}"
+      system "make", "install"
     end
   end
 
