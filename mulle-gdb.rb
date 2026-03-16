@@ -13,10 +13,10 @@ class MulleGdb < Formula
   #   brew uninstall mulle-objc/software/mulle-gdb
   #   brew install --formula --build-bottle mulle-gdb.rb
   #   brew tap-new mulle-objc/software   # if not already tapped
-  #   cp mulle-gdb.rb $(brew --repository mulle-objc/software)/mulle-gdb.rb
+  #   cp mulle-gdb.rb $(brew --repository mulle-objc/software)/Formula/mulle-gdb.rb
   #   brew bottle mulle-objc/software/mulle-gdb
-  #   # rename: mulle-gdb--11.1.0.1.sequoia.bottle.tar.gz
-  #   #      -> mulle-gdb-11.1.0.1.sequoia.bottle.tar.gz
+  #   # rename: mulle-gdb--11.1.0.1.arm64_sequoia.bottle.tar.gz
+  #   #      -> mulle-gdb-11.1.0.1.arm64_sequoia.bottle.tar.gz
   #   gh release upload 11.1.0.1 mulle-gdb-11.1.0.1.*.bottle.tar.gz \
   #      --repo mulle-cc/mulle-gdb
   #
@@ -24,65 +24,28 @@ class MulleGdb < Formula
   #
   # bottle do
   #   root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/11.1.0.1/"
-  #   sha256 cellar: :any_skip_relocation, sequoia:      "..."
   #   sha256 cellar: :any_skip_relocation, arm64_sequoia: "..."
   # end
 
   depends_on "ncurses"
   depends_on "gmp"
-  # mpfr only available/needed on Linux for mulle-gdb
   on_linux do
     depends_on "mpfr"
   end
-
   on_system :linux, macos: :ventura_or_newer do
     depends_on "texinfo" => :build
   end
 
   def install
-    args = %w[
-      --program-prefix=mulle-
-      --disable-binutils
-      --disable-ld
-      --disable-gold
-      --disable-gas
-      --disable-sim
-      --disable-gprof
-      --disable-gprofng
-      --disable-libmcheck
-      --enable-64-bit-bfd
-      --with-curses
-      --without-expat
-      --without-guile
-      --without-lzma
-      --without-intel-pt
-      --without-python
-      --without-tcl
-      --without-tk
-      --with-tui
-      --without-libunwind-ia64
-      --without-x
-      --without-babeltrace
-      --enable-build-warnings=no
-      --with-system-zlib
-    ]
-
-    # Fix `error: use of undeclared identifier 'startup_with_shell'` on macOS
     if OS.mac?
       inreplace "gdb/darwin-nat.c", "#include \"inferior.h\"",
         "#include \"inferior.h\"\n#include \"gdbsupport/common-inferior.h\""
-    else
-      args << "--with-gnu-ld"
     end
 
-    # wipe config.cache files that persist CFLAGS across builds
-    system "find", ".", "-name", "config.cache", "-delete"
-
     mkdir "build" do
-      system "../configure", *args, *std_configure_args
+      system "../configure-mulle-gdb", "--prefix=#{prefix}"
       system "make", "-j#{ENV.make_jobs}", "MAKEINFO=true", "WERROR_CFLAGS="
       system "make", "install-gdb", "MAKEINFO=true"
-      system "ls", "-la", "#{prefix}/bin/" rescue nil
     end
   end
 
