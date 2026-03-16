@@ -42,11 +42,10 @@ class MulleGdb < Formula
         "#include \"inferior.h\"\n#include \"gdbsupport/common-inferior.h\""
     end
 
-    mkdir "build" do
-      system "../configure-mulle-gdb", "--prefix=#{prefix}"
-      system "make", "-j#{ENV.make_jobs}"
-      system "make", "install"
-    end
+    # configure-mulle-gdb calls ./configure so must run from source root
+    system "./configure-mulle-gdb", "--prefix=#{prefix}"
+    system "make", "-j#{ENV.make_jobs}"
+    system "make", "install"
   end
 
   def caveats
