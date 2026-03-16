@@ -22,10 +22,10 @@ class MulleGdb < Formula
   #
   # Then update the bottle do block below with the sha256 output.
   #
-  # bottle do
-  #   root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/16.3.0.1/"
-  #   sha256 cellar: :any_skip_relocation, arm64_sequoia: "..."
-  # end
+  bottle do
+    root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/16.3.0.1/"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "75ee4c878005e87d4d2f5857d2286ebf93c61b3bcd2c7b2cd9ae4760aa364f86"
+  end
 
   depends_on "ncurses"
   depends_on "gmp"
