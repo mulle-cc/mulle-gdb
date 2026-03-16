@@ -12,6 +12,8 @@ on:
 jobs:
   build-deb:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Get version from tag
         id: version
@@ -32,7 +34,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y build-essential \
-            libncurses-dev texinfo install-info
+            libncurses-dev libgmp-dev libmpfr-dev texinfo install-info
 
       - name: Configure
         run: ./configure-mulle-gdb --prefix=/usr/local
