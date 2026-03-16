@@ -22,7 +22,10 @@ jobs:
           TAPDIR="$(brew --repository mulle-objc/software)"
           mkdir -p "${TAPDIR}/Formula"
           cp mulle-gdb.rb "${TAPDIR}/Formula/mulle-gdb.rb"
-          brew install --formula --build-bottle mulle-objc/software/mulle-gdb
+          brew install --formula --build-bottle mulle-objc/software/mulle-gdb || {
+            cat ~/Library/Logs/Homebrew/mulle-gdb/*.log 2>/dev/null || true
+            exit 1
+          }
 
       - name: Build bottle
         run: |
