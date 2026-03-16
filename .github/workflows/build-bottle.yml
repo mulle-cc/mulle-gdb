@@ -17,11 +17,14 @@ jobs:
           ref: master
 
       - name: Install formula
-        run: brew install --formula --build-bottle ./mulle-gdb.rb
+        run: |
+          brew tap-new mulle-objc/software
+          cp mulle-gdb.rb "$(brew --repository mulle-objc/software)/mulle-gdb.rb"
+          brew install --formula --build-bottle mulle-objc/software/mulle-gdb
 
       - name: Build bottle
         run: |
-          brew bottle ./mulle-gdb.rb
+          brew bottle mulle-objc/software/mulle-gdb
           for f in mulle-gdb--*.bottle.tar.gz; do
             mv "$f" "${f/mulle-gdb--/mulle-gdb-}"
           done
