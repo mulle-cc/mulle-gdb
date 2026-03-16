@@ -59,7 +59,7 @@ jobs:
             --deldesc=yes \
             --delspec=yes \
             --default \
-            make install
+            make install-gdb
           mv mulle-gdb_${TAG}-1_${ARCH}.deb \
              mulle-gdb-${TAG}-${DIST}-${ARCH}.deb
 
