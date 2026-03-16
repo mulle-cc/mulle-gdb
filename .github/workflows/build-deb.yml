@@ -1,0 +1,75 @@
+name: Build and upload mulle-gdb .deb
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. 11.1.0.1)'
+        required: true
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          # extract base version (major.minor) from tag like 11.1.0.1
+          BASE="$(echo "${TAG}" | cut -d. -f1,2)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "base=${BASE}" >> $GITHUB_OUTPUT
+          echo "branch=mulle/${BASE}.0" >> $GITHUB_OUTPUT
+
+      - name: Checkout mulle-gdb source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.branch }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y build-essential checkinstall \
+            libncurses-dev texinfo
+
+      - name: Configure
+        run: ./configure-mulle-gdb --prefix=/usr/local
+
+      - name: Build
+        run: make -j$(nproc)
+
+      - name: Package with checkinstall
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          DIST="$(. /etc/os-release && echo ${VERSION_CODENAME})"
+          ARCH="$(dpkg --print-architecture)"
+          sudo checkinstall \
+            --type=debian \
+            --pkgname=mulle-gdb \
+            --pkgversion="${TAG}" \
+            --pkgrelease=1 \
+            --pkglicense="GPL-3.0" \
+            --pkggroup="devel" \
+            --maintainer="nat-cpack@mulle-kybernetik.com" \
+            --nodoc \
+            --backup=no \
+            --deldoc=yes \
+            --deldesc=yes \
+            --delspec=yes \
+            --default \
+            make install
+          mv mulle-gdb_${TAG}-1_${ARCH}.deb \
+             mulle-gdb-${TAG}-${DIST}-${ARCH}.deb
+
+      - name: Upload .deb to release
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          DIST="$(. /etc/os-release && echo ${VERSION_CODENAME})"
+          ARCH="$(dpkg --print-architecture)"
+          gh release upload --clobber "${TAG}" \
+            "mulle-gdb-${TAG}-${DIST}-${ARCH}.deb" \
+            --repo mulle-cc/mulle-gdb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
