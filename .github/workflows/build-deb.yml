@@ -32,13 +32,13 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y build-essential checkinstall \
-            libncurses-dev texinfo
+            libncurses-dev texinfo install-info
 
       - name: Configure
         run: ./configure-mulle-gdb --prefix=/usr/local
 
       - name: Build
-        run: make -j$(nproc)
+        run: make -j$(nproc) MAKEINFO=true
 
       - name: Package with checkinstall
         run: |
@@ -59,7 +59,7 @@ jobs:
             --deldesc=yes \
             --delspec=yes \
             --default \
-            make install-gdb
+            make install-gdb MAKEINFO=true
           mv mulle-gdb_${TAG}-1_${ARCH}.deb \
              mulle-gdb-${TAG}-${DIST}-${ARCH}.deb
 
