@@ -81,7 +81,7 @@ class MulleGdb < Formula
     mkdir "build" do
       system "../configure", *args, *std_configure_args
       system "make", "-j#{ENV.make_jobs}", "MAKEINFO=true", "WERROR_CFLAGS="
-      system "make", "install-gdb", "MAKEINFO=true"
+      system "make", "-C", "gdb", "install", "MAKEINFO=true"
     end
   end
 
