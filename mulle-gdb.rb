@@ -63,17 +63,13 @@ class MulleGdb < Formula
       --without-libunwind-ia64
       --without-x
       --without-babeltrace
+      --enable-build-warnings=no
     ]
 
     # Fix `error: use of undeclared identifier 'startup_with_shell'` on macOS
     if OS.mac?
       inreplace "gdb/darwin-nat.c", "#include \"inferior.h\"",
         "#include \"inferior.h\"\n#include \"gdbsupport/common-inferior.h\""
-      # Apple Silicon: fake target to allow native build
-      if Hardware::CPU.arm?
-        args << "--target=x86_64-apple-darwin20"
-        args << "--program-prefix="
-      end
     else
       args << "--with-gnu-ld"
     end
@@ -83,7 +79,7 @@ class MulleGdb < Formula
 
     mkdir "build" do
       system "../configure", *args, *std_configure_args
-      system "make", "-j#{ENV.make_jobs}", "MAKEINFO=true"
+      system "make", "-j#{ENV.make_jobs}", "MAKEINFO=true", "WERROR_CFLAGS="
       system "make", "install-gdb", "MAKEINFO=true"
     end
   end
