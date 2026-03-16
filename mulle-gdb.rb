@@ -64,6 +64,7 @@ class MulleGdb < Formula
       --without-x
       --without-babeltrace
       --enable-build-warnings=no
+      --with-system-zlib
     ]
 
     # Fix `error: use of undeclared identifier 'startup_with_shell'` on macOS
