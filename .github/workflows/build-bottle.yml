@@ -9,15 +9,7 @@ on:
 
 jobs:
   build-bottle:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            bottle_tag: arm64_sequoia
-          - os: macos-15-large
-            bottle_tag: sequoia
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
