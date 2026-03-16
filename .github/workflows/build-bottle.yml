@@ -1,0 +1,40 @@
+name: Build and upload mulle-gdb Homebrew bottle
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. 11.1.0.1)'
+        required: true
+
+jobs:
+  build-bottle:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Tap and install formula
+        run: |
+          brew tap-new mulle-objc/software 2>/dev/null || true
+          TAPDIR="$(brew --repository mulle-objc/software)"
+          cp mulle-gdb.rb "${TAPDIR}/mulle-gdb.rb"
+          brew install --formula --build-bottle mulle-objc/software/mulle-gdb
+
+      - name: Build bottle
+        run: |
+          brew bottle mulle-objc/software/mulle-gdb
+          for f in mulle-gdb--*.bottle.tar.gz; do
+            mv "$f" "${f/mulle-gdb--/mulle-gdb-}"
+          done
+          ls mulle-gdb-*.bottle.tar.gz
+
+      - name: Upload bottle to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          gh release upload "${TAG}" mulle-gdb-*.bottle.tar.gz \
+            --repo mulle-cc/mulle-gdb --clobber
