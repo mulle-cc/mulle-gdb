@@ -19,7 +19,9 @@ jobs:
       - name: Install formula
         run: |
           brew tap-new mulle-objc/software
-          cp mulle-gdb.rb "$(brew --repository mulle-objc/software)/mulle-gdb.rb"
+          TAPDIR="$(brew --repository mulle-objc/software)"
+          mkdir -p "${TAPDIR}/Formula"
+          cp mulle-gdb.rb "${TAPDIR}/Formula/mulle-gdb.rb"
           brew install --formula --build-bottle mulle-objc/software/mulle-gdb
 
       - name: Build bottle
