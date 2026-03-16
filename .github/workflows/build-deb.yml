@@ -31,7 +31,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y build-essential checkinstall \
+          sudo apt-get install -y build-essential \
             libncurses-dev texinfo install-info
 
       - name: Configure
@@ -40,28 +40,29 @@ jobs:
       - name: Build
         run: make -j$(nproc) MAKEINFO=true
 
-      - name: Package with checkinstall
+      - name: Package as .deb
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           DIST="$(. /etc/os-release && echo ${VERSION_CODENAME})"
           ARCH="$(dpkg --print-architecture)"
-          sudo checkinstall \
-            --type=debian \
-            --pkgname=mulle-gdb \
-            --pkgversion="${TAG}" \
-            --pkgrelease=1 \
-            --pkglicense="GPL-3.0" \
-            --pkggroup="devel" \
-            --maintainer="nat-cpack@mulle-kybernetik.com" \
-            --nodoc \
-            --backup=no \
-            --deldoc=yes \
-            --deldesc=yes \
-            --delspec=yes \
-            --default \
-            make install-gdb MAKEINFO=true
-          mv mulle-gdb_${TAG}-1_${ARCH}.deb \
-             mulle-gdb-${TAG}-${DIST}-${ARCH}.deb
+          STAGEDIR="/tmp/mulle-gdb-pkg"
+
+          # install into staging dir
+          mkdir -p "${STAGEDIR}"
+          make install-gdb MAKEINFO=true DESTDIR="${STAGEDIR}"
+
+          # create debian control file
+          mkdir -p "${STAGEDIR}/DEBIAN"
+          cat > "${STAGEDIR}/DEBIAN/control" << EOF
+          Package: mulle-gdb
+          Version: ${TAG}
+          Architecture: ${ARCH}
+          Maintainer: nat-cpack@mulle-kybernetik.com
+          Description: mulle-gdb, the mulle-objc debugger based on gdb
+          Homepage: https://github.com/mulle-cc/mulle-gdb
+          EOF
+
+          dpkg-deb --build "${STAGEDIR}" "mulle-gdb-${TAG}-${DIST}-${ARCH}.deb"
 
       - name: Upload .deb to release
         run: |
