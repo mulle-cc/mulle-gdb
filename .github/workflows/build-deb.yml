@@ -3,6 +3,11 @@ name: Build and upload mulle-gdb .deb
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. 11.1.0.1)'
+        required: true
 
 jobs:
   build-deb:
@@ -11,7 +16,7 @@ jobs:
       - name: Get version from tag
         id: version
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           # extract base version (major.minor) from tag like 11.1.0.1
           BASE="$(echo "${TAG}" | cut -d. -f1,2)"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
