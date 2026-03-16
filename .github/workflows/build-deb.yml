@@ -26,7 +26,7 @@ jobs:
           echo "branch=mulle/${BASE}.0" >> $GITHUB_OUTPUT
 
       - name: Checkout mulle-gdb source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.version.outputs.branch }}
 
