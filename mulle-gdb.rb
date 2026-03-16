@@ -42,8 +42,9 @@ class MulleGdb < Formula
         "#include \"inferior.h\"\n#include \"gdbsupport/common-inferior.h\""
     end
 
-    # configure-mulle-gdb calls ./configure so must run from source root
-    system "./configure-mulle-gdb", "--prefix=#{prefix}"
+    # configure-mulle-gdb calls ./configure so must run from source root.
+    # Pass --with-system-zlib to avoid bundled zlib/fdopen macro conflict on macOS.
+    system "./configure-mulle-gdb", "--prefix=#{prefix}", "--with-system-zlib"
     system "make", "-j#{ENV.make_jobs}"
     system "make", "install"
   end
