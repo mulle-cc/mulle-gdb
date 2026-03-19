@@ -2460,7 +2460,9 @@ static int resolve_msgsend (CORE_ADDR pc, CORE_ADDR *new_pc);
 //static int resolve_msgsend_stret (CORE_ADDR pc, CORE_ADDR *new_pc);
 static int resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc);
 //static int resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc);
+#if 0
 static int resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc);
+#endif
 
 //
 // the inline function might appear with no optimization compilation
@@ -2848,7 +2850,6 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
   // Without TAO: header is 2*ptr before obj, ISA at header[1]
   // Simplified: ISA is always 1*ptr before obj
   int tao = mulle_objc_runtime_tao(gdbarch);
-#if DEBUG_VERBOSE
   fprintf( stderr, "%s :: tao=%d\n", __PRETTY_FUNCTION__, tao);
 #endif
   
@@ -2875,6 +2876,7 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
 }
 
 
+#if 0
 static int
 resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc)
 {
@@ -2910,6 +2912,7 @@ resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc)
     return 1;
   return 0;
 }
+#endif
 
 
 //static int
@@ -2939,4 +2942,3 @@ resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc)
 //    return 1;
 //  return 0;
 //}
-#endif
