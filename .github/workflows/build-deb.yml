@@ -1,0 +1,78 @@
+name: Build and upload mulle-gdb .deb
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. 11.1.0.1)'
+        required: true
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          # extract base version (major.minor) from tag like 11.1.0.1
+          BASE="$(echo "${TAG}" | cut -d. -f1,2)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "base=${BASE}" >> $GITHUB_OUTPUT
+          echo "branch=mulle/${BASE}.0" >> $GITHUB_OUTPUT
+
+      - name: Checkout mulle-gdb source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.version.outputs.branch }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y build-essential \
+            libncurses-dev libgmp-dev libmpfr-dev texinfo install-info
+
+      - name: Configure
+        run: ./configure-mulle-gdb --prefix=/usr/local
+
+      - name: Build
+        run: make -j$(nproc) MAKEINFO=true
+
+      - name: Package as .deb
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          DIST="$(. /etc/os-release && echo ${VERSION_CODENAME})"
+          ARCH="$(dpkg --print-architecture)"
+          STAGEDIR="/tmp/mulle-gdb-pkg"
+
+          # install into staging dir
+          mkdir -p "${STAGEDIR}"
+          make install-gdb MAKEINFO=true DESTDIR="${STAGEDIR}"
+
+          # create debian control file
+          mkdir -p "${STAGEDIR}/DEBIAN"
+          cat > "${STAGEDIR}/DEBIAN/control" << EOF
+          Package: mulle-gdb
+          Version: ${TAG}
+          Architecture: ${ARCH}
+          Maintainer: nat-cpack@mulle-kybernetik.com
+          Description: mulle-gdb, the mulle-objc debugger based on gdb
+          Homepage: https://github.com/mulle-cc/mulle-gdb
+          EOF
+
+          dpkg-deb --build "${STAGEDIR}" "mulle-gdb-${TAG}-${DIST}-${ARCH}.deb"
+
+      - name: Upload .deb to release
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          DIST="$(. /etc/os-release && echo ${VERSION_CODENAME})"
+          ARCH="$(dpkg --print-architecture)"
+          gh release upload --clobber "${TAG}" \
+            "mulle-gdb-${TAG}-${DIST}-${ARCH}.deb" \
+            --repo mulle-cc/mulle-gdb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
