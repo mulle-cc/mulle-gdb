@@ -45,7 +45,7 @@ manually.
 
 
 ``` bash
-MULLE_GDB_VERSION=16.3.0.1
+MULLE_GDB_VERSION=16.3.0.2
 ./configure-mulle-gdb --prefix "/opt/mulle-gdb/${MULLE_GDB_VERSION}"
 make -j 8
 sudo make install

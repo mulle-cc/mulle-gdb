@@ -318,8 +318,8 @@ public:
 			     CORE_ADDR stop_pc) const override
   {
     struct gdbarch *gdbarch = get_frame_arch (frame);
-    CORE_ADDR real_stop_pc;
-    CORE_ADDR method_stop_pc;
+    CORE_ADDR real_stop_pc = 0;
+    CORE_ADDR method_stop_pc = 0;
 
 #if DEBUG_VERBOSE
     fprintf( stderr, "*>* START OF TRAMPOLINE QUERY\n");
@@ -346,17 +346,37 @@ public:
       {
          if( method_stop_pc == (CORE_ADDR) -1)
          {
-            real_stop_pc = frame_unwind_caller_pc( frame);
+            try
+              {
+                real_stop_pc = frame_unwind_caller_pc( frame);
+              }
+            catch (const gdb_exception_error &)
+              {
+                real_stop_pc = 0;
+              }
+#if DEBUG_VERBOSE
+            fprintf( stderr, "*-1* lookup trampoline: frame_unwind_caller_pc=%p\n", (void *) real_stop_pc);
+#endif
          }
          else
          {
-         	real_stop_pc = gdbarch_skip_trampoline_code
-         	  (gdbarch, frame, method_stop_pc);
+            CORE_ADDR skip = gdbarch_skip_trampoline_code (gdbarch, frame, method_stop_pc);
+#if DEBUG_VERBOSE
+            fprintf( stderr, "*else* method_stop_pc=%p gdbarch_skip_trampoline_code=%p\n",
+                     (void *) method_stop_pc, (void *) skip);
+#endif
+         	real_stop_pc = skip;
          	if (real_stop_pc == 0)
          	  real_stop_pc = method_stop_pc;
+#if DEBUG_VERBOSE
+            fprintf( stderr, "*else* final real_stop_pc=%p\n", (void *) real_stop_pc);
+#endif
          }
       }
 
+#if DEBUG_VERBOSE
+    fprintf( stderr, "*ret* skip_trampoline returning %p\n", (void *) real_stop_pc);
+#endif
     return real_stop_pc;
   }
 
@@ -2260,8 +2280,17 @@ find_implementation_from_protocol_classes( struct gdbarch *gdbarch,
             return( 0);
       }
 
-      // just look through local list and don't walk
-      found = find_implementation_from_class( gdbarch, protoclassAddr, sel, 0xFFFF, startClassid);
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: searching protoclassAddr=%p is_meta=%d\n", __PRETTY_FUNCTION__, (void *) protoclassAddr, is_meta);
+#endif
+      // Search this protocol class's own methods and categories,
+      // but don't walk its superclass or protocols to avoid infinite recursion.
+      found = find_implementation_from_class( gdbarch, protoclassAddr, sel,
+                MULLE_OBJC_CLASS_DONT_INHERIT_SUPERCLASS
+                | MULLE_OBJC_CLASS_DONT_INHERIT_PROTOCOLS
+                | MULLE_OBJC_CLASS_DONT_INHERIT_PROTOCOL_CATEGORIES
+                | MULLE_OBJC_CLASS_DONT_INHERIT_PROTOCOL_META,
+                startClassid);
       if( found)
          return( found);
    }
@@ -2307,6 +2336,10 @@ find_implementation_from_class (struct gdbarch *gdbarch,
 
       if( inheritance == -1)
          inheritance = class_str.inheritance;
+
+#if DEBUG_VERBOSE
+      fprintf( stderr, "%s :: class=%p inheritance=0x%lx\n", __PRETTY_FUNCTION__, (void *) classAddr, (unsigned long) inheritance);
+#endif
 
       // ignore everthing until and including startClassid is found
       if( startClassid)
@@ -2566,6 +2599,20 @@ find_objc_msgcall_submethod (int (*f) (CORE_ADDR, CORE_ADDR *),
     {
       if (f (pc, new_pc) == 0)
       {
+         /* Skip past the method prologue so we land on the first
+            statement, like breakpoints do.  */
+         CORE_ADDR func_start, func_end;
+         if (find_pc_partial_function (*new_pc, nullptr, &func_start, &func_end))
+           {
+             compunit_symtab *cust = find_pc_compunit_symtab (func_start);
+             if (cust != nullptr)
+               {
+                 struct gdbarch *gdbarch = cust->objfile ()->arch ();
+                 CORE_ADDR after_prologue = gdbarch_skip_prologue (gdbarch, func_start);
+                 if (after_prologue > func_start && after_prologue < func_end)
+                   *new_pc = after_prologue;
+               }
+           }
 #if DEBUG_VERBOSE
          fprintf( stderr, "%s :: found endpoint %p -> %p\n",
                         __PRETTY_FUNCTION__, (void *) pc, (void *) *new_pc);

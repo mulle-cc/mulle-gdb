@@ -7926,17 +7926,33 @@ process_event_stop_test (struct execution_control_state *ecs)
 	 into it at all, and (b) what prologue we want to run to the
 	 end of, if we do step into it.  */
       real_stop_pc = skip_language_trampoline (frame, stop_pc);
+      // @mulle-gdb@ hacque! >
+      bool lang_resolved = (real_stop_pc != 0);
+      // @mulle-gdb@ hacque! <
       if (real_stop_pc == 0)
 	real_stop_pc = gdbarch_skip_trampoline_code (gdbarch, frame, stop_pc);
       if (real_stop_pc != 0)
 	ecs->stop_func_start = real_stop_pc;
 
-   // @mulle-gdb@ hacque! >
-   //   if (real_stop_pc != 0) && in_solib_dynsym_resolve_code (real_stop_pc))
-      if (real_stop_pc != 0)
+      // @mulle-gdb@ hacque! >
+      // For ObjC-resolved addresses (lang_resolved), bypass handle_step_into_function
+      // which would clobber stop_func_start via fill_in_stop_func.
+      // For solib trampolines still in dynsym resolver, keep going as before.
+      if (real_stop_pc != 0 && lang_resolved)
 	{
-      in_solib_dynsym_resolve_code (real_stop_pc); // ignore return value
-   // @mulle-gdb@ hacque! >
+	  symtab_and_line sr_sal;
+	  sr_sal.pc = real_stop_pc;
+	  sr_sal.section = find_pc_overlay (real_stop_pc);
+	  sr_sal.pspace = get_frame_program_space (frame);
+	  insert_step_resume_breakpoint_at_sal (gdbarch, sr_sal, null_frame_id);
+	  keep_going (ecs);
+	  return;
+	}
+      if (real_stop_pc != 0
+	  && !lang_resolved
+	  && in_solib_dynsym_resolve_code (real_stop_pc))
+      // @mulle-gdb@ hacque! <
+	{
 	  symtab_and_line sr_sal;
 	  sr_sal.pc = ecs->stop_func_start;
 	  sr_sal.pspace = get_frame_program_space (frame);
