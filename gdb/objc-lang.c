@@ -2577,6 +2577,19 @@ find_objc_msgsend (void)
 }
 
 
+/* Returns non-zero if PC is inside one of the mulle-objc runtime dispatch
+   functions (i.e. a "JSR trampoline" we want to step through invisibly).  */
+int
+objc_pc_in_msgsend_trampoline (CORE_ADDR pc)
+{
+  find_objc_msgsend ();
+  for (unsigned int i = 0; i < nmethcalls; i++)
+    if (methcalls[i].begin != 0 && pc >= methcalls[i].begin && pc < methcalls[i].end)
+      return 1;
+  return 0;
+}
+
+
 /* find_objc_msgcall (replaces pc_off_limits)
  *
  * ALL that this function now does is to determine whether the input

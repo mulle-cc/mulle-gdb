@@ -41,6 +41,7 @@
 #include "value.h"
 #include "observable.h"
 #include "language.h"
+#include "objc-lang.h" // @mulle-gdb@
 #include "solib.h"
 #include "main.h"
 #include "block.h"
@@ -8137,6 +8138,19 @@ process_event_stop_test (struct execution_control_state *ecs)
       end_stepping_range (ecs);
       return;
     }
+
+  // @mulle-gdb@ hacque! >
+  // If we've stepped into a mulle-objc runtime dispatch function (JSR
+  // trampoline), keep going rather than stopping there.  This handles
+  // the return path: after finish/step-out from a method, the PC unwinds
+  // through nested runtime call frames before reaching user code.
+  if (ecs->event_thread->control.step_over_calls != STEP_OVER_NONE
+      && objc_pc_in_msgsend_trampoline (ecs->event_thread->stop_pc ()))
+    {
+      keep_going (ecs);
+      return;
+    }
+  // @mulle-gdb@ hacque! <
 
   /* Handle the case when subroutines have multiple ranges.  When we step
      from one part to the next part of the same subroutine, all subroutine
