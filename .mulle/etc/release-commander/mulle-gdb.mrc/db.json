@@ -1,0 +1,75 @@
+{
+  "files": [
+    {
+      "title": "Figure out mulle-gdb version to release",
+      "filename": "i-figure_out_versi-b1c2d3e4f5a6.md",
+      "scriptFilename": "s-figure_out_versi-b1c2d3e4f5a6.sh",
+      "uuid": "b1c2d3e4-f5a6-0000-0000-000000000000",
+      "principalTool": "",
+      "status": "done",
+      "skillLevel": "Low"
+    },
+    {
+      "title": "Check GDB canary offsets against runtime",
+      "filename": "i-check_gdb_canary-c0ffee001234.md",
+      "scriptFilename": "s-check_gdb_canary-c0ffee001234.sh",
+      "uuid": "c0ffee00-1234-0000-0000-000000000000",
+      "principalTool": "",
+      "status": "done",
+      "skillLevel": "Low"
+    },
+    {
+      "title": "Smoke test mulle-gdb: breakpoint and step-through",
+      "filename": "i-smoke_test_gdb-deadbeef5678.md",
+      "scriptFilename": "s-smoke_test_gdb-deadbeef5678.sh",
+      "uuid": "deadbeef-5678-0000-0000-000000000000",
+      "principalTool": "",
+      "status": "in-progress",
+      "skillLevel": "Low"
+    },
+    {
+      "title": "Release mulle-gdb",
+      "filename": "i-release_mullegdb-d9145906275b.md",
+      "scriptFilename": "s-release_mullegdb-d9145906275b.sh",
+      "uuid": "d9145906-275b-4f52-9f64-49c1d4556b7d",
+      "principalTool": "",
+      "status": "todo",
+      "skillLevel": "Low",
+      "backgroundColor": "#FFCF9F"
+    },
+    {
+      "title": "Create homebrew bottle",
+      "filename": "i-create_homebrew_-i8qnhcjkm4e.md",
+      "scriptFilename": "s-create_homebrew_-i8qnhcjkm4e.sh",
+      "uuid": "i8qnhcjkm4e",
+      "principalTool": "",
+      "status": "todo",
+      "skillLevel": "Low"
+    },
+    {
+      "title": "Upload macos bottle to release",
+      "filename": "i-upload_macos_bot-cqhe4wm9pbb.md",
+      "scriptFilename": "s-upload_macos_bot-cqhe4wm9pbb.sh",
+      "uuid": "cqhe4wm9pbb",
+      "principalTool": "",
+      "status": "todo",
+      "skillLevel": "Low"
+    },
+    {
+      "title": "Copy Formula from homebrew/prerelease to homebrew/software",
+      "filename": "i-edit_homebrew_bo-2e5kdn0w6vf.md",
+      "scriptFilename": "s-edit_homebrew_bo-2e5kdn0w6vf.sh",
+      "uuid": "2e5kdn0w6vf",
+      "principalTool": "",
+      "status": "todo",
+      "skillLevel": "Low"
+    }
+  ],
+  "environmentVariables": {
+    "MULLE_GDB_TAG": "16.3.0.2",
+    "MULLE_OBJC_RUNTIME_DIR": "/home/src/srcO/mulle-objc/mulle-objc-runtime",
+    "PWD": "/home/src/srcL/mulle-gdb-16.3/mulle-gdb"
+  },
+  "images": [],
+  "fontSize": 16
+}

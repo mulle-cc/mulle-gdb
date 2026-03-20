@@ -1938,9 +1938,9 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
   struct value *msg_send = NULL;
   struct value *msg_send_stret = NULL;
   int gnu_runtime = 0;
-// @mulle-objc@ >>>
+// @mulle-gdb@ >>>
   int mulle_objc_runtime = 0;
-// @mulle-objc@ <<<
+// @mulle-gdb@ <<<
 
   struct value *method = NULL;
   struct value *called_method = NULL;
@@ -1963,11 +1963,11 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
   if (lookup_minimal_symbol (current_program_space, "objc_msg_lookup").minsym
       != nullptr)
     gnu_runtime = 1;
-// @mulle-objc@ >>>
+// @mulle-gdb@ >>>
 // does not work
 //  if (lookup_minimal_symbol ("mulle_objc_object_call", 0, 0).minsym)
 //    mulle_objc_runtime = 1;
-// @mulle-objc@ <<<
+// @mulle-gdb@ <<<
 
 
   /* Find the method dispatch (Apple runtime) or method lookup
@@ -1997,7 +1997,7 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
     }
   else
     {
-// @mulle-objc@ >>>
+// @mulle-gdb@ >>>
       if( mulle_objc_runtime)
       {
          msg_send = find_function_in_inferior("mulle_objc_object_call", NULL);
@@ -2011,7 +2011,7 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
          msg_send_stret
    	= find_function_in_inferior ("objc_msgSend_stret", NULL);
       }
-// @mulle-objc@ <<<
+// @mulle-gdb@ <<<
     }
 
   /* Verify the target object responds to this method.  The

@@ -8142,8 +8142,11 @@ process_event_stop_test (struct execution_control_state *ecs)
   // @mulle-gdb@ hacque! >
   // If we've stepped into a mulle-objc runtime dispatch function (JSR
   // trampoline), keep going rather than stopping there.  This handles
-  // the return path: after finish/step-out from a method, the PC unwinds
-  // through nested runtime call frames before reaching user code.
+  // both the return path (step/next) and stepping through nested runtime
+  // frames.  For "next" (STEP_OVER_ALL), the step-resume breakpoint back
+  // in the user's method was already set by the subroutine detection block;
+  // here we just need to keep single-stepping through the trampoline frames
+  // until that breakpoint is hit.
   if (ecs->event_thread->control.step_over_calls != STEP_OVER_NONE
       && objc_pc_in_msgsend_trampoline (ecs->event_thread->stop_pc ()))
     {

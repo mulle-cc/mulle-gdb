@@ -1361,7 +1361,7 @@ read_objc_methlist_nmethods (struct gdbarch *gdbarch, CORE_ADDR addr)
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
   return read_memory_unsigned_integer( addr, len, byte_order);
-  // @mulle-obcj@ fix size <
+  // @mulle-gdb@ fix size <
 }
 
 static void
@@ -1885,7 +1885,7 @@ read_objc_pointerarray_count(struct gdbarch *gdbarch, CORE_ADDR addr)
 
   len = gdbarch_ptr_bit( gdbarch) / 8;
   return read_memory_unsigned_integer( addr, len, byte_order);
-  // @mulle-obcj@ fix size <
+  // @mulle-gdb@ fix size <
 }
 
 
@@ -2862,6 +2862,7 @@ resolve_msgsend_super (CORE_ADDR pc, CORE_ADDR *new_pc)
   // With TAO: header is 4*ptr before obj, ISA at header[3]
   // Without TAO: header is 2*ptr before obj, ISA at header[1]
   // Simplified: ISA is always 1*ptr before obj
+#if DEBUG_VERBOSE
   int tao = mulle_objc_runtime_tao(gdbarch);
   fprintf( stderr, "%s :: tao=%d\n", __PRETTY_FUNCTION__, tao);
 #endif
@@ -2955,3 +2956,5 @@ resolve_msgsend_class (CORE_ADDR pc, CORE_ADDR *new_pc)
 //    return 1;
 //  return 0;
 //}
+
+#endif /* __cplusplus */
