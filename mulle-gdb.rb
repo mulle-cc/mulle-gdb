@@ -2,10 +2,10 @@ class MulleGdb < Formula
   desc "mulle-gdb, the mulle-objc debugger based on gdb"
   homepage "https://github.com/mulle-cc/mulle-gdb"
   license "GPL-3.0-or-later"
-  version "16.3.0.1"
+  version "16.3.0.2"
 
-  url "https://github.com/mulle-cc/mulle-gdb/archive/refs/tags/16.3.0.1.tar.gz"
-  sha256 "49c4b651da3ffddb809dd66c6ca086ee7e102f532312e8069f13ebcfab53fc3a"
+  url "https://github.com/mulle-cc/mulle-gdb/archive/refs/tags/16.3.0.2.tar.gz"
+  sha256 "1effa24415cfb9daf6177b50e747d6c0c78e5c875560db91f95aa33fd19e2323"
 
   #
   # MEMO: For each macOS version, build bottles with:
@@ -23,8 +23,8 @@ class MulleGdb < Formula
   # Then update the bottle do block below with the sha256 output.
   #
   bottle do
-    root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/16.3.0.1/"
-    sha256 cellar: :any_skip_relocation, arm64_sequoia: "75ee4c878005e87d4d2f5857d2286ebf93c61b3bcd2c7b2cd9ae4760aa364f86"
+    root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/16.3.0.2/"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "41f27da787e44a3ef3a04fe8dcdb3d53ae5cd001b486102fc9925824cbbc1087"
   end
 
   depends_on "ncurses"

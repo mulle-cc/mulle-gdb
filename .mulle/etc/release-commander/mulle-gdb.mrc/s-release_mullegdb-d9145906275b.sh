@@ -12,7 +12,7 @@ git add .mulle/etc/release-commander/
 git commit -m "release ${MULLE_GDB_TAG}" || echo "Nothing new to commit"
 git tag -f "${MULLE_GDB_TAG}"
 git push github "${BRANCH}"
-git push github "refs/tags/${MULLE_GDB_TAG}"
+git push github "refs/tags/${MULLE_GDB_TAG}" --force
 
 echo ""
 echo "=== Creating GitHub release (if needed) ==="
