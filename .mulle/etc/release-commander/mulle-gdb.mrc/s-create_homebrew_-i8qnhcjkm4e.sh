@@ -1,13 +1,18 @@
 #!/bin/bash
-# Build Homebrew bottles for mulle-gdb on macOS via GitHub Actions.
-# Triggers build-bottle.yml which runs on macos-15 (arm64) and macos-15-large (x86_64).
-# The workflow checks out the branch, builds the bottle,
-# and uploads it to the GitHub release.
 
 set -e
 
 REPO="mulle-cc/mulle-gdb"
 BRANCH="mulle/16.3.0"
+FORMULA="mulle-gdb.rb"
+
+# verify formula version matches before triggering
+FORMULA_VERSION="$(grep '^\s*version ' "${FORMULA}" | sed 's/.*"\(.*\)".*/\1/')"
+if [ "${FORMULA_VERSION}" != "${MULLE_GDB_TAG}" ]; then
+   echo "FAIL: formula version '${FORMULA_VERSION}' != MULLE_GDB_TAG '${MULLE_GDB_TAG}'" >&2
+   echo "Update ${FORMULA} version before building bottles." >&2
+   exit 1
+fi
 
 gh workflow run build-bottle.yml \
    --repo "${REPO}" \
@@ -28,9 +33,14 @@ gh run watch "${RUN_ID}" --repo "${REPO}"
 
 echo ""
 echo "Bottles on release ${MULLE_GDB_TAG}:"
-gh release view "${MULLE_GDB_TAG}" --repo "${REPO}" \
-   --json assets -q '.assets[].name' | grep bottle || echo "No bottles found"
+BOTTLES="$(gh release view "${MULLE_GDB_TAG}" --repo "${REPO}" \
+   --json assets -q '.assets[].name' | grep 'bottle' || true)"
+echo "${BOTTLES}"
 
-echo ""
-echo "TODO: update bottle do block in mulle-gdb.rb with sha256 values,"
-echo "      then push to mulle-objc/homebrew-software."
+# verify bottle filename contains correct version
+if ! echo "${BOTTLES}" | grep -q "${MULLE_GDB_TAG}"; then
+   echo ""
+   echo "FAIL: no bottle with version ${MULLE_GDB_TAG} in filename" >&2
+   echo "Bottle was likely built with wrong formula version." >&2
+   exit 1
+fi

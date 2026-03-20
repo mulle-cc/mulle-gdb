@@ -4,6 +4,13 @@ set -e
 
 REPO="mulle-cc/mulle-gdb"
 BRANCH="mulle/16.3.0"
+FORMULA="mulle-gdb.rb"
+
+echo "=== Updating formula version to ${MULLE_GDB_TAG} ==="
+
+sed -i "s|version \".*\"|version \"${MULLE_GDB_TAG}\"|" "${FORMULA}"
+sed -i "s|/tags/.*\.tar\.gz|/tags/${MULLE_GDB_TAG}.tar.gz|" "${FORMULA}"
+sed -i "s|/download/.*\"/|/download/${MULLE_GDB_TAG}/\"|" "${FORMULA}"
 
 echo "=== Committing and pushing ==="
 
@@ -26,6 +33,19 @@ if ! gh release view "${MULLE_GDB_TAG}" --repo "${REPO}" > /dev/null 2>&1; then
 else
    echo "Release ${MULLE_GDB_TAG} already exists"
 fi
+
+echo ""
+echo "=== Updating source tarball sha256 ==="
+
+TARBALL_SHA="$(curl -sL "https://github.com/${REPO}/archive/refs/tags/${MULLE_GDB_TAG}.tar.gz" | sha256sum | cut -d' ' -f1)"
+echo "Source sha256: ${TARBALL_SHA}"
+sed -i "/^  url /{ n; s|sha256 \".*\"|sha256 \"${TARBALL_SHA}\"|; }" "${FORMULA}"
+
+git add "${FORMULA}"
+git commit -m "update ${FORMULA} sha256 for ${MULLE_GDB_TAG}" || true
+git tag -f "${MULLE_GDB_TAG}"
+git push github "${BRANCH}"
+git push github "refs/tags/${MULLE_GDB_TAG}" --force
 
 echo ""
 echo "=== Triggering .deb build ==="
