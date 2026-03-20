@@ -24,7 +24,7 @@ class MulleGdb < Formula
   #
   bottle do
     root_url "https://github.com/mulle-cc/mulle-gdb/releases/download/16.3.0.2/"
-    sha256 cellar: :any_skip_relocation, arm64_sequoia: "41f27da787e44a3ef3a04fe8dcdb3d53ae5cd001b486102fc9925824cbbc1087"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "7eb757a3ca48fe5c49052c797ee42d5068f40d1a39bf7429b50ceab928d96ab5"
   end
 
   depends_on "ncurses"
