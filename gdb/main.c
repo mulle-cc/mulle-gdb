@@ -715,7 +715,13 @@ captured_main_1 (struct captured_main_args *context)
 
   current_directory = getcwd (NULL, 0);
   if (current_directory == NULL)
-    perror_warning_with_name (_("error finding working directory"));
+    {
+      perror_warning_with_name (_("error finding working directory"));
+      // @mulle-gdb@ > fall back to $PWD if getcwd fails (e.g. sandbox with unreadable parent dirs)
+      const char *pwd = getenv ("PWD");
+      current_directory = xstrdup (pwd != NULL ? pwd : "/");
+      // @mulle-gdb@ <
+    }
 
   /* Set the sysroot path.  */
   gdb_sysroot = relocate_gdb_directory (TARGET_SYSTEM_ROOT,

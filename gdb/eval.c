@@ -1925,6 +1925,9 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
   struct value *msg_send = NULL;
   struct value *msg_send_stret = NULL;
   int gnu_runtime = 0;
+// @mulle-gdb@ >>>
+  int mulle_objc_runtime = 0;
+// @mulle-gdb@ <<<
 
   struct value *method = NULL;
   struct value *called_method = NULL;
@@ -1947,6 +1950,12 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
   if (lookup_minimal_symbol (current_program_space, "objc_msg_lookup").minsym
       != nullptr)
     gnu_runtime = 1;
+// @mulle-gdb@ >>>
+// does not work
+//  if (lookup_minimal_symbol ("mulle_objc_object_call", 0, 0).minsym)
+//    mulle_objc_runtime = 1;
+// @mulle-gdb@ <<<
+
 
   /* Find the method dispatch (Apple runtime) or method lookup
      (GNU runtime) function for Objective-C.  These will be used
@@ -1975,10 +1984,21 @@ eval_op_objc_msgcall (struct type *expect_type, struct expression *exp,
     }
   else
     {
-      msg_send = find_function_in_inferior ("objc_msgSend", NULL);
-      /* Special dispatcher for methods returning structs.  */
-      msg_send_stret
-	= find_function_in_inferior ("objc_msgSend_stret", NULL);
+// @mulle-gdb@ >>>
+      if( mulle_objc_runtime)
+      {
+         msg_send = find_function_in_inferior("mulle_objc_object_call", NULL);
+         /* Special dispatcher for methods returning structs.  */
+         msg_send_stret = msg_send;
+      }
+      else
+      {
+         msg_send = find_function_in_inferior ("objc_msgSend", NULL);
+         /* Special dispatcher for methods returning structs.  */
+         msg_send_stret
+   	= find_function_in_inferior ("objc_msgSend_stret", NULL);
+      }
+// @mulle-gdb@ <<<
     }
 
   /* Verify the target object responds to this method.  The

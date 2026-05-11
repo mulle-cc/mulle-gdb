@@ -460,7 +460,7 @@ print_frame_arg (const frame_print_options &fp_opts,
 		 just want to print their addresses.  Print ??? for args whose
 		 address we do not know.  We pass 2 as "recurse" to val_print
 		 because our standard indentation here is 4 spaces, and
-		 val_print indents 2 for each recurse.  */ 
+		 val_print indents 2 for each recurse.  */
 
 	      annotate_arg_value (arg->val->type ());
 
@@ -1314,6 +1314,35 @@ find_frame_funname (const frame_info_ptr &frame, enum language *funlang,
   return funname;
 }
 
+/// @mulle-gdb@ filter out boring runtime calls >
+static int   mulle_is_boring_functionname( char *s)
+{
+  while( *s == '_')
+    ++s;
+   // if you need to debug the runtime, just use regular gdb
+  return( ! strncmp( "mulle_objc_", s, 11));
+}
+
+int   mulle_is_boring_frame( frame_info_ptr frame, int level);
+
+int   mulle_is_boring_frame( frame_info_ptr frame, int level)
+{
+  enum language funlang = language_unknown;
+  struct symbol *func;
+
+  gdb::unique_xmalloc_ptr<char> funname
+    = find_frame_funname( frame, &funlang, &func);
+
+  if( ! funname)
+    return( 0);  // interesting!
+
+  if( frame_relative_level (frame) <= level)
+     return( 0); // interesting!
+  return( mulle_is_boring_functionname( funname.get()));
+}
+/// @mulle-gdb@ filter out boring runtime calls <
+
+
 static void
 print_frame (struct ui_out *uiout,
 	     const frame_print_options &fp_opts,
@@ -1331,6 +1360,12 @@ print_frame (struct ui_out *uiout,
 
   gdb::unique_xmalloc_ptr<char> funname
     = find_frame_funname (frame, &funlang, &func);
+
+  /// @mulle-gdb@ hack out known trampoline functions >>
+  // we never swallow the first frame
+  if( funname && frame_relative_level (frame) > 0 && mulle_is_boring_functionname( funname.get()))
+     return;
+  /// @mulle-gdb@ hack out known trampoline functions <<
 
   annotate_frame_begin (print_level ? frame_relative_level (frame) : 0,
 			gdbarch, pc.value_or (0));
@@ -1379,7 +1414,7 @@ print_frame (struct ui_out *uiout,
 	  }
 	else
 	  numargs = -1;
-    
+
 	{
 	  ui_out_emit_list list_emitter (uiout, "args");
 	  try
@@ -1399,7 +1434,7 @@ print_frame (struct ui_out *uiout,
     if (print_what != SHORT_LOCATION && sal.symtab)
       {
 	const char *filename_display;
-      
+
 	filename_display = symtab_to_filename_for_display (sal.symtab);
 	annotate_frame_source_begin ();
 	uiout->wrap_hint (3);
@@ -2590,6 +2625,9 @@ find_relative_frame (frame_info_ptr frame, int *level_offset_ptr)
 
       if (!prev)
 	break;
+      /// @mulle-gdb@ ignore trampoline class though... >
+      if( ! mulle_is_boring_frame( prev, 0))
+      /// @mulle-gdb@ ignore trampoline class though... <
       (*level_offset_ptr)--;
       frame = prev;
     }
@@ -2601,6 +2639,9 @@ find_relative_frame (frame_info_ptr frame, int *level_offset_ptr)
 
       if (!next)
 	break;
+      /// @mulle-gdb@ ignore trampoline class though... >
+      if( ! mulle_is_boring_frame( next, 0))
+      /// @mulle-gdb@ ignore trampoline class though... <
       (*level_offset_ptr)++;
       frame = next;
     }
